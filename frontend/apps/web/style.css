@@ -1,0 +1,361 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.player-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+/* 顶部导航 */
+.player-header {
+    background-color: #2c3e50;
+    color: white;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.player-header h1 {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.search-container, .scan-container {
+    display: flex;
+    gap: 10px;
+}
+
+.search-container input, .scan-container input {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.search-container button, .scan-container button {
+    padding: 8px 16px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.search-container button:hover, .scan-container button:hover {
+    background-color: #2980b9;
+}
+
+/* 主内容区 */
+.player-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* 左侧音乐库 */
+.library-section {
+    flex: 2;
+    padding: 20px;
+    border-right: 1px solid #e0e0e0;
+    overflow-y: auto;
+}
+
+.library-section h2 {
+    font-size: 18px;
+    margin-bottom: 15px;
+}
+
+.library-tabs {
+    display: flex;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-btn.active {
+    border-bottom: 2px solid #3498db;
+    color: #3498db;
+    font-weight: bold;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.song-list, .artist-list, .album-list {
+    list-style: none;
+}
+
+.song-list li, .artist-list li, .album-list li {
+    padding: 10px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.song-list li:hover, .artist-list li:hover, .album-list li:hover {
+    background-color: #f5f5f5;
+}
+
+.song-list li .song-info {
+    flex: 1;
+}
+
+.song-list li .song-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.song-list li .song-artist {
+    font-size: 12px;
+    color: #666;
+}
+
+.song-list li .song-duration {
+    font-size: 12px;
+    color: #999;
+}
+
+/* 右侧播放列表 */
+.playlist-section {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.playlist-section h2 {
+    font-size: 18px;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#clear-playlist {
+    padding: 5px 10px;
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+#clear-playlist:hover {
+    background-color: #c0392b;
+}
+
+.playlist {
+    list-style: none;
+}
+
+.playlist li {
+    padding: 10px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.playlist li:hover {
+    background-color: #f5f5f5;
+}
+
+.playlist li .song-info {
+    flex: 1;
+}
+
+.playlist li .song-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.playlist li .song-artist {
+    font-size: 12px;
+    color: #666;
+}
+
+/* 底部播放控制栏 */
+.player-controls {
+    background-color: #2c3e50;
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.current-song {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.song-info h3 {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.song-info p {
+    font-size: 14px;
+    color: #bdc3c7;
+}
+
+.progress-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 4px;
+    background-color: #34495e;
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: #3498db;
+    border-radius: 2px;
+    width: 0%;
+}
+
+.time {
+    font-size: 12px;
+    color: #bdc3c7;
+}
+
+.control-buttons {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.control-buttons button {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.control-buttons button:hover {
+    color: #3498db;
+}
+
+#play-btn {
+    font-size: 24px;
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#mute-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#volume-slider {
+    width: 100px;
+    cursor: pointer;
+}
+
+.playback-mode {
+    display: flex;
+    align-items: center;
+}
+
+#mode-btn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+#mode-btn:hover {
+    background-color: #2980b9;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .player-content {
+        flex-direction: column;
+    }
+
+    .library-section {
+        border-right: none;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .player-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .current-song {
+        order: 1;
+    }
+
+    .control-buttons {
+        order: 2;
+        justify-content: center;
+    }
+
+    .volume-control {
+        order: 3;
+        justify-content: center;
+    }
+
+    .playback-mode {
+        order: 4;
+        justify-content: center;
+    }
+}
+

@@ -1,0 +1,10 @@
+PyQt5==5.15.10
+pydub==0.25.1
+sounddevice==0.5.5
+mutagen==1.47.0
+numpy==1.26.4
+faster-whisper==1.1.1
+ctranslate2==4.6.0
+opencc-python-reimplemented==0.1.7
+requests==2.32.3
+pytest==8.3.5

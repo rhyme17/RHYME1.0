@@ -1,0 +1,9 @@
+# 开发与质量工具
+pytest==8.3.5
+ruff==0.9.10
+mypy==1.15.0
+pytest-cov==6.0.0
+pytest-qt==4.4.0
+pre-commit==4.1.0
+pyinstaller==6.12.0
+

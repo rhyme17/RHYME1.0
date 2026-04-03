@@ -1,0 +1,24 @@
+# UI框架
+PyQt5==5.15.10
+
+# 音频处理
+pydub==0.25.1
+sounddevice==0.5.5
+
+# 元数据解析
+mutagen==1.47.0
+
+# 数据处理
+numpy==1.26.4
+
+# 离线歌词识别(ASR)
+faster-whisper==1.1.1
+ctranslate2==4.6.0
+opencc-python-reimplemented==0.1.7
+
+# 在线歌词抓取
+requests==2.32.3
+
+
+# 测试
+pytest==8.3.5

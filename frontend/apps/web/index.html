@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地音乐播放器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="player-container">
+        <!-- 顶部导航 -->
+        <header class="player-header">
+            <h1>本地音乐播放器</h1>
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="搜索音乐...">
+                <button id="search-btn">搜索</button>
+            </div>
+            <div class="scan-container">
+                <input type="text" id="directory-input" placeholder="输入音乐文件夹路径...">
+                <button id="scan-btn">扫描音乐</button>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="player-content">
+            <!-- 左侧音乐库 -->
+            <section class="library-section">
+                <h2>音乐库</h2>
+                <div class="library-tabs">
+                    <button class="tab-btn active" data-tab="all">全部音乐</button>
+                    <button class="tab-btn" data-tab="artists">艺术家</button>
+                    <button class="tab-btn" data-tab="albums">专辑</button>
+                </div>
+                <div class="tab-content active" id="all-tab">
+                    <ul class="song-list" id="all-songs">
+                        <!-- 歌曲列表将通过JavaScript动态生成 -->
+                    </ul>
+                </div>
+                <div class="tab-content" id="artists-tab">
+                    <ul class="artist-list" id="artists">
+                        <!-- 艺术家列表将通过JavaScript动态生成 -->
+                    </ul>
+                </div>
+                <div class="tab-content" id="albums-tab">
+                    <ul class="album-list" id="albums">
+                        <!-- 专辑列表将通过JavaScript动态生成 -->
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 右侧播放列表 -->
+            <section class="playlist-section">
+                <h2>播放列表
+                    <button id="clear-playlist">清空</button>
+                </h2>
+                <ul class="playlist" id="playlist">
+                    <!-- 播放列表将通过JavaScript动态生成 -->
+                </ul>
+            </section>
+        </main>
+
+        <!-- 底部播放控制栏 -->
+        <footer class="player-controls">
+            <div class="current-song">
+                <div class="song-info">
+                    <h3 id="current-title">未播放</h3>
+                    <p id="current-artist">-</p>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" id="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <span class="time" id="current-time">0:00</span>
+                    <span class="time" id="total-time">0:00</span>
+                </div>
+            </div>
+            <div class="control-buttons">
+                <button id="prev-btn">◀</button>
+                <button id="play-btn">▶</button>
+                <button id="next-btn">▶▶</button>
+            </div>
+            <div class="volume-control">
+                <button id="mute-btn">🔊</button>
+                <input type="range" id="volume-slider" min="0" max="100" value="80">
+            </div>
+            <div class="playback-mode">
+                <button id="mode-btn">顺序播放</button>
+            </div>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
