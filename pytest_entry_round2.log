@@ -1,7 +1,0 @@
-............                                                             [100%]
-============================== warnings summary ===============================
-tests/test_windows_entry_bootstrap_regression.py::test_resolve_windows_symbols_includes_player_init_orchestration_service
-  D:\Projects\PycharmProjects\RHYME\.venv\Lib\site-packages\pydub\utils.py:14: DeprecationWarning: 'audioop' is deprecated and slated for removal in Python 3.13
-    import audioop
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

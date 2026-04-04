@@ -44,7 +44,15 @@ logs/
 *.m4a
 *.lrc
 
+# Keep the root test sample audio tracked
+!test.wav
+
 # Local debug dumps
 debug_search.html
 debug_detail.html
+
+# Local test/runtime logs (repo root)
+pytest_*.log
+test_run.log
+tray_test.log
 
