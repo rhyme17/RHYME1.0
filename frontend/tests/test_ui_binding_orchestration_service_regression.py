@@ -54,6 +54,8 @@ class _FakePlayer:
         self.playlist_list = _FakePlaylistList()
 
         self.reload_lyrics_btn = _FakeWidget()
+        self.select_lyrics_btn = _FakeWidget()
+        self.manual_lyrics_fetch_btn = _FakeWidget()
         self.lyrics_asr_btn = _FakeWidget()
         self.progress_slider = type("_Progress", (), {"sliderMoved": _FakeSignal(), "sliderReleased": _FakeSignal()})()
         self.prev_btn = _FakeWidget()
@@ -126,7 +128,13 @@ class _FakePlayer:
     def reload_local_lyrics_for_current_song(self):
         pass
 
+    def request_manual_local_lyrics_for_current_song(self):
+        pass
+
     def request_lyrics_asr_for_current_song(self):
+        pass
+
+    def request_manual_online_lyrics(self):
         pass
 
     def set_position_preview(self):
@@ -169,6 +177,8 @@ def test_bind_all_only_runs_once_for_same_player():
     assert len(player.open_scan_dialog_btn.clicked.callbacks) == 1
     assert len(player.playlist_list.itemDoubleClicked.callbacks) == 1
     assert len(player.playlist_list.model().rowsMoved.callbacks) == 1
+    assert len(player.select_lyrics_btn.clicked.callbacks) == 1
+    assert len(player.manual_lyrics_fetch_btn.clicked.callbacks) == 1
     assert len(player.progress_slider.sliderMoved.callbacks) == 1
     assert len(player.volume_slider.valueChanged.callbacks) == 1
 

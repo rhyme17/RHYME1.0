@@ -192,7 +192,7 @@ python app.py
 
 推荐将打包产物和构建缓存分离：
 
-- `dist/windows/RHYME/`：可分发应用目录（含 `RHYME.exe`）
+- `dist/RHYME/`：可分发应用目录（含 `RHYME.exe`）
 - `build/pyinstaller/`：PyInstaller 中间文件（可删除）
 
 ### 安装打包依赖
@@ -212,7 +212,7 @@ powershell -ExecutionPolicy Bypass -File frontend\tools\build_windows_package.ps
 
 打包完成后产物在：
 
-- `dist/windows/RHYME/RHYME.exe`
+- `dist/RHYME/RHYME.exe`
 
 ### 生成安装包（双击安装）
 

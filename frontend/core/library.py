@@ -74,7 +74,10 @@ class MusicLibrary:
     
     def _extract_song_info(self, file_path):
         """从音频文件中提取元数据"""
-        default_title = self._normalize_text(os.path.splitext(os.path.basename(file_path))[0], '未知歌曲')
+        raw_filename_title = os.path.splitext(os.path.basename(file_path))[0]
+        cleaned_filename_title = self._strip_track_number_prefix(raw_filename_title)
+        cleaned_filename_title = self._strip_bracketed_chunks(cleaned_filename_title)
+        default_title = self._normalize_text(cleaned_filename_title, '未知歌曲')
         default_artist = '未知艺术家'
         default_album = self._normalize_text(os.path.basename(os.path.dirname(file_path)), '未知专辑')
 
@@ -134,6 +137,41 @@ class MusicLibrary:
         if len(remaining) == len(parts):
             return raw_title
         return " - ".join(remaining).strip() or raw_title
+
+    @staticmethod
+    def _strip_track_number_prefix(title):
+        text = str(title or '').strip()
+        if not text:
+            return text
+
+        # 常见文件名前缀：01.、01-、01_、01、等
+        text = re.sub(r"^\s*(?:track\s*)?\d{1,3}\s*[\-._、:：)\]]+\s*", "", text, flags=re.IGNORECASE)
+        # 仅当是前导 0 的编号时再移除纯空格分隔，避免误伤如“7 rings”
+        text = re.sub(r"^\s*0\d{1,2}\s+", "", text)
+        return text.strip()
+
+    @staticmethod
+    def _strip_bracketed_chunks(title):
+        text = str(title or '').strip()
+        if not text:
+            return text
+
+        # 连续清理一轮，覆盖常见中英文括号内容。
+        patterns = [
+            r"\([^()]*\)",
+            r"\[[^\[\]]*\]",
+            r"\{[^{}]*\}",
+            r"（[^（）]*）",
+            r"【[^【】]*】",
+            r"〔[^〔〕]*〕",
+            r"《[^《》]*》",
+            r"〈[^〈〉]*〉",
+        ]
+        for pattern in patterns:
+            text = re.sub(pattern, " ", text)
+
+        text = re.sub(r"\s{2,}", " ", text)
+        return text.strip(" -_")
 
     def _artist_tokens(self, artist):
         raw = str(artist or '').strip()

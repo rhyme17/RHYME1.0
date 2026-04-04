@@ -132,7 +132,7 @@ class LyricsService:
             logger.exception("ASR生成歌词异常")
             return False, "", f"离线歌词识别异常: {exc}"
 
-    def try_fetch_online_lrc(self, song):
+    def try_fetch_online_lrc(self, song, query_title="", query_artist=""):
         if not self.online_lyrics_enabled:
             return False, "", "在线歌词获取已关闭"
 
@@ -140,12 +140,17 @@ class LyricsService:
         if not audio_path:
             return False, "", "音频文件路径无效"
 
-        query_title = str(song.get("title", "") or "").strip()
-        if not query_title:
-            query_title = os.path.splitext(os.path.basename(audio_path))[0].strip()
-        query_artist = str(song.get("artist", "") or "").strip()
+        resolved_title = str(query_title or "").strip()
+        if not resolved_title:
+            resolved_title = str(song.get("title", "") or "").strip()
+        if not resolved_title:
+            resolved_title = os.path.splitext(os.path.basename(audio_path))[0].strip()
 
-        result = self.online_lyrics_client.fetch(query_title, query_artist)
+        resolved_artist = str(query_artist or "").strip()
+        if not resolved_artist:
+            resolved_artist = str(song.get("artist", "") or "").strip()
+
+        result = self.online_lyrics_client.fetch(resolved_title, resolved_artist)
         if not result.success:
             error = str(result.error or "在线歌词获取失败")
             if result.debug_search_path or result.debug_detail_path:
@@ -163,6 +168,28 @@ class LyricsService:
             return False, "", "在线歌词获取成功，但写入本地歌词失败"
 
         return True, target_path, ""
+
+    def fetch_online_lrc_text(self, query_title, query_artist=""):
+        if not self.online_lyrics_enabled:
+            return False, "", "在线歌词获取已关闭"
+
+        resolved_title = str(query_title or "").strip()
+        if not resolved_title:
+            return False, "", "歌曲名称为空"
+        resolved_artist = str(query_artist or "").strip()
+
+        result = self.online_lyrics_client.fetch(resolved_title, resolved_artist)
+        if not result.success:
+            error = str(result.error or "在线歌词获取失败")
+            if result.debug_search_path or result.debug_detail_path:
+                debug_files = [path for path in (result.debug_search_path, result.debug_detail_path) if path]
+                error = f"{error}（debug: {'; '.join(debug_files)}）"
+            return False, "", error
+
+        lrc_text = str(result.lrc_text or "").strip()
+        if not lrc_text:
+            return False, "", "在线歌词获取成功，但内容为空"
+        return True, lrc_text, ""
 
     def find_local_lrc(self, song):
         """公开本地歌词查找接口，供 UI 层安全调用。"""

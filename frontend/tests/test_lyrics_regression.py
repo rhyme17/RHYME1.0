@@ -330,6 +330,70 @@ def test_try_fetch_online_lrc_returns_debug_error(monkeypatch, tmp_path):
     assert "debug_search.html" in err
 
 
+def test_try_fetch_online_lrc_prefers_manual_query(monkeypatch, tmp_path):
+    service = LyricsService(cache_dir=str(tmp_path / "cache"))
+
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    audio_file = music_dir / "origin.mp3"
+    audio_file.write_bytes(b"fake")
+
+    captured = {}
+
+    class _Result:
+        success = True
+        lrc_text = "[00:00.00]line"
+        song_name = "手动标题"
+        artist = "手动歌手"
+        detail_url = ""
+        error = ""
+        debug_search_path = ""
+        debug_detail_path = ""
+
+    def _fake_fetch(title, artist):
+        captured["title"] = title
+        captured["artist"] = artist
+        return _Result()
+
+    monkeypatch.setattr(service.online_lyrics_client, "fetch", _fake_fetch)
+    song = {"id": "song-manual", "title": "默认标题", "artist": "默认歌手", "path": str(audio_file)}
+
+    ok, _saved_path, err = service.try_fetch_online_lrc(song, query_title="手动标题", query_artist="")
+    assert ok is True
+    assert err == ""
+    assert captured["title"] == "手动标题"
+    assert captured["artist"] == "默认歌手"
+
+
+def test_fetch_online_lrc_text_by_query(monkeypatch, tmp_path):
+    service = LyricsService(cache_dir=str(tmp_path / "cache"))
+
+    class _Result:
+        success = True
+        lrc_text = "[00:00.00]line"
+        song_name = "标题"
+        artist = "歌手"
+        detail_url = ""
+        error = ""
+        debug_search_path = ""
+        debug_detail_path = ""
+
+    captured = {}
+
+    def _fake_fetch(title, artist):
+        captured["title"] = title
+        captured["artist"] = artist
+        return _Result()
+
+    monkeypatch.setattr(service.online_lyrics_client, "fetch", _fake_fetch)
+    ok, lrc_text, err = service.fetch_online_lrc_text("手动歌名", "")
+    assert ok is True
+    assert lrc_text == "[00:00.00]line"
+    assert err == ""
+    assert captured["title"] == "手动歌名"
+    assert captured["artist"] == ""
+
+
 def test_export_cache_lyrics_uses_custom_output_dir_and_can_resolve(tmp_path):
     custom_dir = tmp_path / "custom-lyrics"
     service = LyricsService(cache_dir=str(tmp_path / "cache"), lyrics_output_dir=str(custom_dir))

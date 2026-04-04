@@ -188,6 +188,50 @@ def test_extract_song_info_uses_filename_as_title_even_when_tag_title_exists(mon
     assert song["duration"] == 245.0
 
 
+def test_extract_song_info_strips_track_number_prefix_from_filename(monkeypatch, tmp_path: Path):
+    song_file = tmp_path / "01. Slow Down.mp3"
+    song_file.write_bytes(b"fake")
+
+    class _FakeInfo:
+        length = 120.0
+
+    class _FakeAudio:
+        info = _FakeInfo()
+
+        @staticmethod
+        def get(_key, default):
+            return default
+
+    monkeypatch.setattr(library_module, "File", lambda *_args, **_kwargs: _FakeAudio())
+
+    library = MusicLibrary()
+    song = library._extract_song_info(str(song_file))
+
+    assert song["title"] == "Slow Down"
+
+
+def test_extract_song_info_strips_bracketed_chunks_from_filename(monkeypatch, tmp_path: Path):
+    song_file = tmp_path / "01. Slow Down（Live）[Demo](2024).mp3"
+    song_file.write_bytes(b"fake")
+
+    class _FakeInfo:
+        length = 120.0
+
+    class _FakeAudio:
+        info = _FakeInfo()
+
+        @staticmethod
+        def get(_key, default):
+            return default
+
+    monkeypatch.setattr(library_module, "File", lambda *_args, **_kwargs: _FakeAudio())
+
+    library = MusicLibrary()
+    song = library._extract_song_info(str(song_file))
+
+    assert song["title"] == "Slow Down"
+
+
 def test_extract_song_info_strips_artist_prefix_or_suffix_from_filename(monkeypatch, tmp_path: Path):
     song_file_a = tmp_path / "Taylor Swift - Love Story.mp3"
     song_file_b = tmp_path / "Because of You - Kelly Clarkson.mp3"

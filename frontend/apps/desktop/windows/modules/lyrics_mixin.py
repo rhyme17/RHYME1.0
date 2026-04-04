@@ -1,6 +1,11 @@
 import os
+import shutil
 
-from frontend.apps.desktop.windows.modules.lyrics_worker import LyricsAsrWorker, LyricsFetchWorker
+from PyQt5.QtWidgets import QFileDialog
+
+from frontend.apps.desktop.windows.modules.lyrics_worker import LyricsAsrWorker, LyricsFetchWorker, LyricsFetchPreviewWorker
+from frontend.apps.desktop.windows.modules.manual_lyrics_fetch_dialog import ManualLyricsFetchDialog
+from frontend.core.lrc_parser import parse_lrc_text
 from frontend.utils.logging_utils import get_logger
 
 
@@ -76,7 +81,7 @@ class LyricsMixin:
             self._show_lyrics_hint("离线识别不可用，请检查依赖", timeout_ms=2500)
         self._refresh_lyrics_asr_button()
 
-    def _start_online_lyrics_fetch(self, song):
+    def _start_online_lyrics_fetch(self, song, query_title="", query_artist=""):
         if getattr(self, "_is_closing", False):
             return
         if self.lyrics_fetch_running:
@@ -86,7 +91,13 @@ class LyricsMixin:
             self._refresh_lyrics_asr_button()
             self._lyrics_fetch_worker_token += 1
             token = self._lyrics_fetch_worker_token
-            worker = LyricsFetchWorker(self.lyrics_service, song, self)
+            worker = LyricsFetchWorker(
+                self.lyrics_service,
+                song,
+                query_title=query_title,
+                query_artist=query_artist,
+                parent=self,
+            )
             self.lyrics_fetch_worker = worker
             worker.finished_with_result.connect(
                 lambda success, song_id, output_path, error_message, _worker=worker, _token=token: self.on_online_lyrics_finished(
@@ -103,6 +114,171 @@ class LyricsMixin:
             self.lyrics_fetch_worker = None
             self.lyrics_fetch_running = False
             self._refresh_lyrics_asr_button()
+
+    def request_manual_online_lyrics(self):
+        if getattr(self, "_is_closing", False):
+            return
+        if self.lyrics_fetch_running:
+            self._show_lyrics_hint("在线歌词获取中，请稍候...", timeout_ms=2200)
+            return
+        if self.lyrics_asr_running:
+            self._show_lyrics_hint("离线识别进行中，请稍候...", timeout_ms=2200)
+            return
+
+        current = dict(self.current_song or {})
+        default_title = str(current.get("title", "") or "").strip()
+        if not default_title:
+            path = str(current.get("path", "") or "")
+            default_title = os.path.splitext(os.path.basename(path))[0].strip()
+        default_artist = str(current.get("artist", "") or "").strip()
+
+        dialog = ManualLyricsFetchDialog(self, default_title=default_title, default_artist=default_artist)
+        if dialog.exec_() != dialog.Accepted:
+            return
+
+        title = dialog.title_text
+        artist = dialog.artist_text
+        self.lyric_label.setText("正在在线获取歌词，请稍候...")
+        self._show_lyrics_hint("开始手动在线获取歌词", timeout_ms=2200)
+
+        if self.current_song:
+            self._start_online_lyrics_fetch(self.current_song, query_title=title, query_artist=artist)
+        else:
+            self._start_online_lyrics_preview_fetch(query_title=title, query_artist=artist)
+
+    def request_manual_local_lyrics_for_current_song(self):
+        if getattr(self, "_is_closing", False):
+            return
+        if not self.current_song:
+            self._show_lyrics_hint("请先播放歌曲", timeout_ms=2200)
+            return
+        if self.lyrics_fetch_running:
+            self._show_lyrics_hint("在线歌词获取中，请稍候...", timeout_ms=2200)
+            return
+        if self.lyrics_asr_running:
+            self._show_lyrics_hint("离线识别进行中，请稍候...", timeout_ms=2200)
+            return
+
+        song_path = str(self.current_song.get("path", "") or "")
+        initial_dir = os.path.dirname(song_path) if song_path else ""
+        selected_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择歌词文件",
+            initial_dir,
+            "歌词文件 (*.lrc);;所有文件 (*.*)",
+        )
+        if not selected_path:
+            return
+
+        lines, _meta = self.lyrics_service.parse_lrc_safe(selected_path)
+        if not lines:
+            self._show_lyrics_hint("所选歌词文件为空或格式无效", timeout_ms=2800)
+            return
+
+        saved_path, save_error = self._save_selected_lyrics_for_song(self.current_song, selected_path)
+        self.current_lyrics_lines = lines
+        self.current_lyrics_index = -1
+        self.current_lyrics_source = "manual-local"
+        self.lyrics_asr_available = bool(self.lyrics_service.is_asr_available())
+        self.update_lyrics_view(self.audio_player.get_position())
+        self._refresh_lyrics_asr_button()
+        if save_error:
+            self._show_lyrics_hint(f"已加载歌词，但保存失败：{save_error}", timeout_ms=3200)
+            return
+        if saved_path:
+            self._show_lyrics_hint("已加载并保存所选歌词", timeout_ms=2200)
+            return
+        self._show_lyrics_hint("已加载所选歌词", timeout_ms=2200)
+
+    def _save_selected_lyrics_for_song(self, song, selected_path):
+        audio_path = str((song or {}).get("path", "") or "")
+        if not audio_path:
+            return "", "当前歌曲路径无效"
+        try:
+            song_dir = os.path.dirname(audio_path)
+            lyrics_dir = os.path.join(song_dir, "lyrics")
+            os.makedirs(lyrics_dir, exist_ok=True)
+            audio_name = os.path.splitext(os.path.basename(audio_path))[0].strip()
+            if not audio_name:
+                return "", "歌曲文件名无效"
+            target_path = os.path.join(lyrics_dir, f"{audio_name}.lrc")
+            if os.path.normcase(os.path.abspath(selected_path)) != os.path.normcase(os.path.abspath(target_path)):
+                shutil.copyfile(selected_path, target_path)
+            return target_path, ""
+        except Exception as exc:
+            logger.exception("保存手动选择歌词失败: song_id=%s path=%s", (song or {}).get("id", ""), selected_path)
+            return "", str(exc)
+
+    def _start_online_lyrics_preview_fetch(self, query_title, query_artist=""):
+        if getattr(self, "_is_closing", False):
+            return
+        if self.lyrics_fetch_running:
+            return
+        try:
+            self.lyrics_fetch_running = True
+            self._refresh_lyrics_asr_button()
+            self._lyrics_fetch_worker_token += 1
+            token = self._lyrics_fetch_worker_token
+            worker = LyricsFetchPreviewWorker(
+                self.lyrics_service,
+                query_title=query_title,
+                query_artist=query_artist,
+                parent=self,
+            )
+            self.lyrics_fetch_worker = worker
+            worker.finished_with_result.connect(
+                lambda success, lrc_text, error_message, _worker=worker, _token=token: self.on_online_lyrics_preview_finished(
+                    success,
+                    lrc_text,
+                    error_message,
+                    worker_ref=_worker,
+                    worker_token=_token,
+                )
+            )
+            worker.start()
+        except Exception:
+            self.lyrics_fetch_worker = None
+            self.lyrics_fetch_running = False
+            self._refresh_lyrics_asr_button()
+
+    def on_online_lyrics_preview_finished(self, success, lrc_text, error_message, worker_ref=None, worker_token=None):
+        if getattr(self, "_is_closing", False):
+            self.lyrics_fetch_running = False
+            return
+        if worker_ref is not None and worker_ref is not self.lyrics_fetch_worker:
+            try:
+                worker_ref.deleteLater()
+            except Exception:
+                pass
+            return
+        if worker_token is not None and int(worker_token) != int(self._lyrics_fetch_worker_token):
+            return
+
+        self.lyrics_fetch_running = False
+        if self.lyrics_fetch_worker:
+            self.lyrics_fetch_worker.deleteLater()
+            self.lyrics_fetch_worker = None
+
+        if not success:
+            self.lyric_label.setText("暂无歌词，可点击“识别歌词”手动生成")
+            self._show_lyrics_hint(f"在线歌词获取失败：{error_message}", timeout_ms=3200)
+            self._refresh_lyrics_asr_button()
+            return
+
+        lines, _metadata = parse_lrc_text(str(lrc_text or ""))
+        if not lines:
+            self.lyric_label.setText("在线歌词获取成功，但内容无时间轴")
+            self._show_lyrics_hint("歌词获取成功，但无法按时间同步显示", timeout_ms=3200)
+            self._refresh_lyrics_asr_button()
+            return
+
+        self.current_lyrics_lines = lines
+        self.current_lyrics_index = -1
+        self.current_lyrics_source = "online-manual-preview"
+        self.lyrics_song_id = ""
+        self.update_lyrics_view(0)
+        self._show_lyrics_hint("手动在线歌词获取成功（仅预览，未保存）", timeout_ms=2600)
+        self._refresh_lyrics_asr_button()
 
     def on_online_lyrics_finished(self, success, song_id, _output_path, error_message, worker_ref=None, worker_token=None):
         if getattr(self, "_is_closing", False):
@@ -192,7 +368,7 @@ class LyricsMixin:
         song = self.current_song
         local_path = ""
         try:
-            local_path = self.lyrics_service._find_local_lrc(song)
+            local_path = self.lyrics_service.find_local_lrc(song)
         except Exception:
             local_path = ""
 
@@ -200,7 +376,7 @@ class LyricsMixin:
             self._show_lyrics_hint("未找到本地歌词文件", timeout_ms=2600)
             return
 
-        lines, _meta = self.lyrics_service._safe_parse_lrc(local_path)
+        lines, _meta = self.lyrics_service.parse_lrc_safe(local_path)
         if not lines:
             self.current_lyrics_lines = []
             self.current_lyrics_index = -1

@@ -260,9 +260,43 @@ class PlaylistManager:
         raw_fallback = str(fallback or '').strip()
         if raw_path:
             title = os.path.splitext(os.path.basename(raw_path))[0].strip()
+            title = PlaylistManager._strip_track_number_prefix(title)
+            title = PlaylistManager._strip_bracketed_chunks(title)
             if title:
                 return PlaylistManager._strip_artist_from_title(title, artist)
+        raw_fallback = PlaylistManager._strip_bracketed_chunks(raw_fallback)
         return PlaylistManager._strip_artist_from_title(raw_fallback, artist)
+
+    @staticmethod
+    def _strip_track_number_prefix(title):
+        text = str(title or '').strip()
+        if not text:
+            return text
+        text = re.sub(r"^\s*(?:track\s*)?\d{1,3}\s*[\-._、:：)\]]+\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"^\s*0\d{1,2}\s+", "", text)
+        return text.strip()
+
+    @staticmethod
+    def _strip_bracketed_chunks(title):
+        text = str(title or '').strip()
+        if not text:
+            return text
+
+        patterns = [
+            r"\([^()]*\)",
+            r"\[[^\[\]]*\]",
+            r"\{[^{}]*\}",
+            r"（[^（）]*）",
+            r"【[^【】]*】",
+            r"〔[^〔〕]*〕",
+            r"《[^《》]*》",
+            r"〈[^〈〉]*〉",
+        ]
+        for pattern in patterns:
+            text = re.sub(pattern, " ", text)
+
+        text = re.sub(r"\s{2,}", " ", text)
+        return text.strip(" -_")
 
     @staticmethod
     def _strip_artist_from_title(title, artist):

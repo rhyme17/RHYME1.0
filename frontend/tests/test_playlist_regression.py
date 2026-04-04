@@ -216,6 +216,38 @@ def test_sanitize_song_title_uses_filename_instead_of_tag_title():
     assert saved["title"] == "Slow Down"
 
 
+def test_sanitize_song_title_strips_track_number_prefix_from_filename():
+    manager = PlaylistManager()
+    song = {
+        "id": "s1",
+        "title": "ignored",
+        "artist": "artist",
+        "album": "album",
+        "path": "C:/music/01. Slow Down.mp3",
+        "duration": 10,
+    }
+
+    assert manager.create_playlist("RoadTrip", [song], set_current=True, overwrite=True) is True
+    saved = manager.get_playlist()[0]
+    assert saved["title"] == "Slow Down"
+
+
+def test_sanitize_song_title_strips_bracketed_chunks_from_filename():
+    manager = PlaylistManager()
+    song = {
+        "id": "s1",
+        "title": "ignored",
+        "artist": "artist",
+        "album": "album",
+        "path": "C:/music/01. Slow Down（Live）[Demo](2024).mp3",
+        "duration": 10,
+    }
+
+    assert manager.create_playlist("RoadTrip", [song], set_current=True, overwrite=True) is True
+    saved = manager.get_playlist()[0]
+    assert saved["title"] == "Slow Down"
+
+
 def test_load_playlist_normalizes_title_from_path(tmp_path: Path):
     data_file = tmp_path / "playlists_title_fix.json"
     payload = {

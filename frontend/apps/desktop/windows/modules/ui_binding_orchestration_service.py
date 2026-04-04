@@ -52,6 +52,8 @@ class UiBindingOrchestrationService:
     @staticmethod
     def bind_lyrics_and_playback_actions(player):
         player.reload_lyrics_btn.clicked.connect(player.reload_local_lyrics_for_current_song)
+        player.select_lyrics_btn.clicked.connect(player.request_manual_local_lyrics_for_current_song)
+        player.manual_lyrics_fetch_btn.clicked.connect(player.request_manual_online_lyrics)
         player.lyrics_asr_btn.clicked.connect(player.request_lyrics_asr_for_current_song)
         player.progress_slider.sliderMoved.connect(player.set_position_preview)
         player.progress_slider.sliderReleased.connect(player.apply_slider_position)
