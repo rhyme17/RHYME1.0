@@ -48,6 +48,7 @@ $WorkPath = Join-Path $ProjectRoot "build\pyinstaller"
 $LegacyDistPath = Join-Path $ProjectRoot "dist\windows"
 $LegacyFlatDistPath = Join-Path $ProjectRoot "dist\RHYME"
 $LegacyWorkPath = Join-Path $ProjectRoot "build\RHYME"
+$TargetAppDir = Join-Path $DistPath "RHYME"
 $IconSourcePath = Join-Path $ProjectRoot "img.png"
 $IconOutputPath = Join-Path $ProjectRoot "build\windows\app.ico"
 $IconGeneratorScript = Join-Path $ProjectRoot "frontend\tools\generate_windows_icon.py"
@@ -148,6 +149,27 @@ try {
         if (Test-Path $LegacyWorkPath) {
             Remove-Item $LegacyWorkPath -Recurse -Force
             Write-Log "Cleaned legacy work: $LegacyWorkPath"
+        }
+    }
+
+    # 即使未使用 -Clean，也尝试清理历史目录，防止用户误点旧产物。
+    if ((Test-Path $LegacyDistPath) -and ($LegacyDistPath -ne $DistPath)) {
+        Remove-Item $LegacyDistPath -Recurse -Force
+        Write-Log "Removed stale legacy dist: $LegacyDistPath"
+    }
+    if (Test-Path $LegacyWorkPath) {
+        Remove-Item $LegacyWorkPath -Recurse -Force
+        Write-Log "Removed stale legacy work: $LegacyWorkPath"
+    }
+
+    # 非 -Clean 模式下也保证目标输出目录可写，避免 PyInstaller 在 COLLECT 阶段因占用失败。
+    if ((-not $Clean) -and (Test-Path $TargetAppDir)) {
+        try {
+            Remove-Item $TargetAppDir -Recurse -Force
+            Write-Log "Removed previous app output: $TargetAppDir"
+        }
+        catch {
+            throw "Cannot clean output directory: $TargetAppDir. Please close running RHYME.exe and retry with -Clean."
         }
     }
 

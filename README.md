@@ -210,13 +210,28 @@ cd D:\Projects\PycharmProjects\RHYME
 powershell -ExecutionPolicy Bypass -File frontend\tools\build_windows_package.ps1 -Clean
 ```
 
+说明：
+
+- 脚本会自动将项目根目录 `img.png` 转换为 `build/windows/app.ico` 并用于 `RHYME.exe` 图标。
+- `-Clean` 会清理历史构建目录，统一保留当前结构（`dist/RHYME`、`build/pyinstaller`、`build/windows`）。
+- 即使不加 `-Clean`，脚本也会尽量删除历史遗留目录（如 `dist/windows`、`build/RHYME`），防止误运行旧版本。
+
 打包完成后产物在：
 
 - `dist/RHYME/RHYME.exe`
 
+若图标已替换但资源管理器仍显示旧图标，通常是 Windows 图标缓存导致。可重启资源管理器后再查看：
+
+```powershell
+Stop-Process -Name explorer -Force
+Start-Process explorer.exe
+```
+
+若打包提示无法清理 `dist/RHYME`（`Cannot clean output directory`），通常是旧版 `RHYME.exe` 正在运行或被占用。请先关闭播放器进程后重试。
+
 ### 生成安装包（双击安装）
 
-推荐使用 Inno Setup 将打包目录转换为安装程序：
+推荐使用 Inno Setup 将打包目录转换为安装程序（需仓库中已提供 `build/windows/RHYME.iss`）：
 
 ```powershell
 cd D:\Projects\PycharmProjects\RHYME
@@ -226,6 +241,8 @@ cd D:\Projects\PycharmProjects\RHYME
 安装包建议输出：
 
 - `dist/installer/RHYME-Setup.exe`
+
+若当前仓库没有 `build/windows/RHYME.iss`，可先只分发 `dist/RHYME/` 目录中的绿色版程序。
 
 > 可在仓库中配套维护发布说明模板：`.github/release-template.md`
 

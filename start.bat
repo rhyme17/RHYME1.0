@@ -8,8 +8,8 @@ set RHYME_ASR_BEAM_SIZE=8
 set RHYME_ASR_VAD_FILTER=true
 set RHYME_ASR_TO_SIMPLIFIED=true
 
-rem 启动本地音乐播放器
-echo 启动本地音乐播放器...
+rem 启动RHYME
+echo 启动RHYME...
 cd frontend\apps\desktop\windows
 python app.py
 

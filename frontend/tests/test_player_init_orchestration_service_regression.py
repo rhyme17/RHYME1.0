@@ -62,7 +62,7 @@ def test_initialize_player_applies_expected_order_and_dependencies():
         "init_runtime_state",
     ]
     assert player.calls == [
-        ("setWindowTitle", "本地音乐播放器"),
+        ("setWindowTitle", "RHYME"),
         ("setWindowFlag", 123, False),
         ("setGeometry", 100, 100, 1000, 700),
         ("load_app_settings",),

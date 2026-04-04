@@ -12,7 +12,7 @@
 - 
 
 ## Packaging
-- Windows portable app: `dist/windows/RHYME/RHYME.exe`
+- Windows portable app: `dist/RHYME/RHYME.exe`
 - Windows installer: `dist/installer/RHYME-Setup.exe`
 
 ## Notes
