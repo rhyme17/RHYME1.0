@@ -31,8 +31,20 @@ class LibraryMixin:
             self._scan_controller = controller
         return controller
 
+    def _remember_last_scanned_directory(self, directory):
+        path = str(directory or "").strip()
+        if not path:
+            return
+        self.last_scanned_directory = path
+        if hasattr(self, "schedule_save_app_settings"):
+            self.schedule_save_app_settings()
+
     def open_scan_dialog(self):
-        dialog = ScanDialog(self)
+        dialog = ScanDialog(
+            self,
+            initial_directory=self.last_scanned_directory,
+            on_directory_selected=self._remember_last_scanned_directory,
+        )
         self.scan_dialog = dialog
         dialog.set_playlist_names(
             self.playlist_manager.list_playlist_names(),
@@ -129,9 +141,10 @@ class LibraryMixin:
         dialog.hint_label.setText(f"已加入 {added} 首，跳过 {skipped} 首")
 
     def browse_directory(self):
-        directory = QFileDialog.getExistingDirectory(self, "选择音乐文件夹")
+        directory = QFileDialog.getExistingDirectory(self, "选择音乐文件夹", self.last_scanned_directory or "")
         if directory:
             self.directory_input.setText(directory)
+            self._remember_last_scanned_directory(directory)
 
     def scan_music(self):
         directory = self.directory_input.text()
@@ -144,7 +157,7 @@ class LibraryMixin:
             QMessageBox.warning(self, "错误", "请选择有效的音乐文件夹")
             return
 
-        self.last_scanned_directory = directory
+        self._remember_last_scanned_directory(directory)
 
         self.scan_btn.setEnabled(False)
         self.scan_btn.setText("扫描中...")

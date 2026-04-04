@@ -142,6 +142,16 @@ class PersistenceMixin:
         if isinstance(accent_enabled, bool):
             self.progress_visual_accent_enabled = accent_enabled
 
+        lyrics_output_dir = data.get("lyrics_output_dir")
+        if isinstance(lyrics_output_dir, str):
+            self.lyrics_output_dir = lyrics_output_dir.strip()
+            if hasattr(self, "lyrics_service") and hasattr(self.lyrics_service, "set_lyrics_output_dir"):
+                self.lyrics_service.set_lyrics_output_dir(self.lyrics_output_dir)
+
+        last_scanned_directory = data.get("last_scanned_directory")
+        if isinstance(last_scanned_directory, str):
+            self.last_scanned_directory = last_scanned_directory.strip()
+
     def save_app_settings(self):
         current_song_id = ""
         if getattr(self, "current_song", None):
@@ -179,6 +189,8 @@ class PersistenceMixin:
             "progress_visual_pulse_enabled": bool(getattr(self, "progress_visual_pulse_enabled", True)),
             "progress_visual_wave_enabled": bool(getattr(self, "progress_visual_wave_enabled", True)),
             "progress_visual_accent_enabled": bool(getattr(self, "progress_visual_accent_enabled", True)),
+            "lyrics_output_dir": str(getattr(self, "lyrics_output_dir", "") or ""),
+            "last_scanned_directory": str(getattr(self, "last_scanned_directory", "") or ""),
         }
         try:
             _atomic_write_json(self.settings_file_path, data)

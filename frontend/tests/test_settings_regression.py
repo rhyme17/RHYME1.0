@@ -1,16 +1,17 @@
+import importlib
 import sys
 
 from PyQt5.QtWidgets import QApplication
 
-from apps.desktop.windows.modules import settings_dialog as sd
-from apps.desktop.windows.modules.settings_dialog import SettingsDialog
+sd = importlib.import_module("apps.desktop.windows.modules.settings_dialog")
+SettingsDialog = sd.SettingsDialog
 
 
 app = QApplication.instance() or QApplication(sys.argv)
 
 
 def test_settings_dialog_exposes_lyrics_output_dir_and_browse_path(monkeypatch):
-    captured = {"start_dir": None}
+    captured: dict[str, str | None] = {"start_dir": None}
 
     def _fake_get_existing_directory(_parent, _title, start_dir=""):
         captured["start_dir"] = start_dir
@@ -32,4 +33,5 @@ def test_settings_dialog_allows_clearing_custom_lyrics_output_dir():
     dialog.lyrics_output_dir_input.setText("")
 
     assert dialog.values()["lyrics_output_dir"] == ""
+
 

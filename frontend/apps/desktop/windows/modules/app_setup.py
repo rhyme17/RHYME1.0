@@ -70,6 +70,7 @@ def init_runtime_state(player):
     player.progress_visual_pulse_enabled = True
     player.progress_visual_wave_enabled = True
     player.progress_visual_accent_enabled = True
+    player.lyrics_output_dir = ""
     player.async_decode_on_play = bool(getattr(sys, "frozen", False))
     player._decode_request_id = 0
     player.decode_worker = None

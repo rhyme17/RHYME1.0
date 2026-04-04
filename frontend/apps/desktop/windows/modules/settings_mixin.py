@@ -1,3 +1,5 @@
+import os
+
 from PyQt5.QtWidgets import QDialog
 
 try:
@@ -30,6 +32,7 @@ class SettingsMixin:
             "progress_visual_pulse_enabled": bool(getattr(self, "progress_visual_pulse_enabled", True)),
             "progress_visual_wave_enabled": bool(getattr(self, "progress_visual_wave_enabled", True)),
             "progress_visual_accent_enabled": bool(getattr(self, "progress_visual_accent_enabled", True)),
+            "lyrics_output_dir": str(getattr(self, "lyrics_output_dir", "") or ""),
         }
 
     def open_settings_dialog(self):
@@ -93,6 +96,16 @@ class SettingsMixin:
         self.progress_visual_accent_enabled = bool(
             values.get("progress_visual_accent_enabled", self.progress_visual_accent_enabled)
         )
+        lyrics_output_dir = str(values.get("lyrics_output_dir", getattr(self, "lyrics_output_dir", "")) or "").strip()
+        if lyrics_output_dir:
+            try:
+                lyrics_output_dir = os.path.abspath(lyrics_output_dir)
+                os.makedirs(lyrics_output_dir, exist_ok=True)
+            except Exception:
+                if hasattr(self, "show_status_hint"):
+                    self.show_status_hint("歌词目录不可用，已回退默认路径", timeout_ms=2200)
+                lyrics_output_dir = ""
+        self.lyrics_output_dir = lyrics_output_dir
 
         if hasattr(self, "set_progress_visual_pulse_enabled"):
             self.set_progress_visual_pulse_enabled(self.progress_visual_pulse_enabled)
@@ -100,6 +113,9 @@ class SettingsMixin:
             self.set_progress_visual_wave_enabled(self.progress_visual_wave_enabled)
         if hasattr(self, "set_progress_visual_accent_enabled"):
             self.set_progress_visual_accent_enabled(self.progress_visual_accent_enabled)
+
+        if hasattr(self, "lyrics_service") and hasattr(self.lyrics_service, "set_lyrics_output_dir"):
+            self.lyrics_service.set_lyrics_output_dir(self.lyrics_output_dir)
 
         if self.tray_enabled:
             if hasattr(self, "init_system_tray"):

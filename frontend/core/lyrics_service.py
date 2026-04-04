@@ -39,6 +39,7 @@ class LyricsService:
     def __init__(
         self,
         cache_dir,
+        lyrics_output_dir="",
         asr_model_size=DEFAULT_ASR_MODEL_SIZE,
         asr_language="zh",
         asr_device="cpu",
@@ -55,6 +56,7 @@ class LyricsService:
         self.asr_compute_type = asr_compute_type
         self.asr_beam_size = asr_beam_size
         self.asr_vad_filter = asr_vad_filter
+        self.lyrics_output_dir = str(lyrics_output_dir or "").strip()
         self.online_lyrics_enabled = bool(online_lyrics_enabled)
         self._asr_available_cache = None
         os.makedirs(self.cache_dir, exist_ok=True)
@@ -64,6 +66,9 @@ class LyricsService:
             debug_dir=self.online_lyrics_debug_dir,
         )
         self._instrumental_guard_song_ids = set()
+
+    def set_lyrics_output_dir(self, path):
+        self.lyrics_output_dir = str(path or "").strip()
 
     def resolve_for_song(self, song):
         song_id = song.get("id", "")
@@ -173,8 +178,18 @@ class LyricsService:
             return ""
 
         song_dir = os.path.dirname(audio_path)
-        lyrics_dir = os.path.join(song_dir, "lyrics")
-        os.makedirs(lyrics_dir, exist_ok=True)
+        lyrics_dir = ""
+        custom_dir = str(getattr(self, "lyrics_output_dir", "") or "").strip()
+        if custom_dir:
+            try:
+                lyrics_dir = os.path.abspath(custom_dir)
+                os.makedirs(lyrics_dir, exist_ok=True)
+            except Exception:
+                logger.warning("自定义歌词目录不可用，回退歌曲同级目录: %s", custom_dir)
+                lyrics_dir = ""
+        if not lyrics_dir:
+            lyrics_dir = os.path.join(song_dir, "lyrics")
+            os.makedirs(lyrics_dir, exist_ok=True)
 
         title = self._resolve_export_title(song, audio_path)
         target_path = os.path.join(lyrics_dir, f"{title}.lrc")
@@ -279,6 +294,16 @@ class LyricsService:
         for candidate in candidates:
             if os.path.exists(candidate):
                 return candidate
+
+        custom_dir = str(getattr(self, "lyrics_output_dir", "") or "").strip()
+        if custom_dir:
+            try:
+                custom_title = self._resolve_export_title(song, audio_path)
+                custom_candidate = os.path.join(os.path.abspath(custom_dir), f"{custom_title}.lrc")
+                if os.path.exists(custom_candidate):
+                    return custom_candidate
+            except Exception:
+                pass
         return ""
 
     def _safe_text(self, value):

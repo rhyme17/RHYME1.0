@@ -3,8 +3,12 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
     QSpinBox,
     QVBoxLayout,
 )
@@ -81,6 +85,19 @@ class SettingsDialog(QDialog):
         self.visual_accent_checkbox = QCheckBox("重音抖动")
         self.visual_accent_checkbox.setChecked(bool(initial_settings.get("progress_visual_accent_enabled", True)))
         visual_form.addRow(self.visual_accent_checkbox)
+
+        lyrics_dir_row = QHBoxLayout()
+        self.lyrics_output_dir_input = QLineEdit()
+        self.lyrics_output_dir_input.setPlaceholderText("留空则保存到歌曲同级 lyrics 目录")
+        self.lyrics_output_dir_input.setText(str(initial_settings.get("lyrics_output_dir", "") or ""))
+        self.lyrics_output_dir_browse_btn = QPushButton("浏览")
+        self.lyrics_output_dir_clear_btn = QPushButton("默认")
+        self.lyrics_output_dir_browse_btn.clicked.connect(self._choose_lyrics_output_dir)
+        self.lyrics_output_dir_clear_btn.clicked.connect(lambda: self.lyrics_output_dir_input.setText(""))
+        lyrics_dir_row.addWidget(self.lyrics_output_dir_input, 1)
+        lyrics_dir_row.addWidget(self.lyrics_output_dir_browse_btn)
+        lyrics_dir_row.addWidget(self.lyrics_output_dir_clear_btn)
+        visual_form.addRow("歌词保存目录", lyrics_dir_row)
         root.addWidget(visual_group)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -100,7 +117,14 @@ class SettingsDialog(QDialog):
             "progress_visual_pulse_enabled": self.visual_pulse_checkbox.isChecked(),
             "progress_visual_wave_enabled": self.visual_wave_checkbox.isChecked(),
             "progress_visual_accent_enabled": self.visual_accent_checkbox.isChecked(),
+            "lyrics_output_dir": self.lyrics_output_dir_input.text().strip(),
         }
+
+    def _choose_lyrics_output_dir(self):
+        start_dir = self.lyrics_output_dir_input.text().strip()
+        directory = QFileDialog.getExistingDirectory(self, "选择歌词保存目录", start_dir)
+        if directory:
+            self.lyrics_output_dir_input.setText(directory)
 
 
 

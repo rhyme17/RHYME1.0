@@ -36,7 +36,12 @@ class ScanController:
             QMessageBox.warning(owner, "错误", "请选择有效的音乐文件夹")
             return
 
-        owner.last_scanned_directory = directory
+        if hasattr(owner, "_remember_last_scanned_directory"):
+            owner._remember_last_scanned_directory(directory)
+        else:
+            owner.last_scanned_directory = directory
+            if hasattr(owner, "schedule_save_app_settings"):
+                owner.schedule_save_app_settings()
         dialog.set_scanning_state(True, "正在扫描，请稍候...")
         logger.info("开始扫描目录: %s", directory)
 

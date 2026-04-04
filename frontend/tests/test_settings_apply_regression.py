@@ -1,4 +1,5 @@
 import importlib
+import os
 import sys
 
 from PyQt5.QtWidgets import QApplication
@@ -73,8 +74,9 @@ def test_apply_settings_syncs_custom_lyrics_dir_to_service_and_persists():
         persist=True,
     )
 
-    assert target.lyrics_output_dir.lower().endswith("d:/lyrics/custom".lower())
-    assert target.lyrics_service.output_dir.lower().endswith("d:/lyrics/custom".lower())
+    expected = os.path.normcase(os.path.abspath("D:/Lyrics/Custom"))
+    assert os.path.normcase(target.lyrics_output_dir) == expected
+    assert os.path.normcase(target.lyrics_service.output_dir) == expected
     assert target.saved is True
 
 
@@ -91,4 +93,5 @@ def test_apply_settings_rejects_invalid_lyrics_dir_and_falls_back(monkeypatch):
     assert target.lyrics_output_dir == ""
     assert target.lyrics_service.output_dir == ""
     assert target.status_messages
+
 

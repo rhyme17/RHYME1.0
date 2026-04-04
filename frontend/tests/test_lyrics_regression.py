@@ -330,6 +330,33 @@ def test_try_fetch_online_lrc_returns_debug_error(monkeypatch, tmp_path):
     assert "debug_search.html" in err
 
 
+def test_export_cache_lyrics_uses_custom_output_dir_and_can_resolve(tmp_path):
+    custom_dir = tmp_path / "custom-lyrics"
+    service = LyricsService(cache_dir=str(tmp_path / "cache"), lyrics_output_dir=str(custom_dir))
+
+    music_dir = tmp_path / "music"
+    music_dir.mkdir()
+    audio_file = music_dir / "demo.mp3"
+    audio_file.write_bytes(b"fake")
+
+    cache_file = tmp_path / "cache_custom.lrc"
+    cache_file.write_text("[00:00.00]hello\n", encoding="utf-8")
+
+    song = {
+        "id": "song-custom-dir",
+        "title": "DemoSong",
+        "artist": "demo",
+        "path": str(audio_file),
+    }
+
+    target = service.export_cache_lyrics_to_song_dir(song, str(cache_file))
+    assert os.path.exists(target)
+    assert str(custom_dir) in target
+
+    resolved = service.find_local_lrc(song)
+    assert resolved == target
+
+
 def test_generate_lrc_with_asr_skips_repeated_instrumental_song(monkeypatch, tmp_path):
     service = LyricsService(cache_dir=str(tmp_path / "cache"))
     audio_file = tmp_path / "instrumental.mp3"

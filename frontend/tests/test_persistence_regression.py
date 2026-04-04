@@ -1,4 +1,5 @@
 import json
+import importlib
 import sys
 from pathlib import Path
 
@@ -9,8 +10,8 @@ PROJECT_ROOT = FRONTEND_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from apps.desktop.windows.modules import persistence_mixin as pm
-from apps.desktop.windows.modules.persistence_mixin import PersistenceMixin
+pm = importlib.import_module("apps.desktop.windows.modules.persistence_mixin")
+PersistenceMixin = pm.PersistenceMixin
 
 
 class _DummySlider:
@@ -72,8 +73,19 @@ class _DummyPersistence(PersistenceMixin):
         self.progress_visual_pulse_enabled = True
         self.progress_visual_wave_enabled = True
         self.progress_visual_accent_enabled = True
+        self.lyrics_output_dir = ""
+        self.last_scanned_directory = ""
         self._pending_resume_song_id = ""
         self._pending_resume_position_seconds = 0.0
+        self.lyrics_service = None
+
+
+class _DummyLyricsService:
+    def __init__(self):
+        self.output_dir = None
+
+    def set_lyrics_output_dir(self, path):
+        self.output_dir = path
 
 
 def test_save_app_settings_falls_back_to_ui_progress_when_not_playing(tmp_path: Path):
@@ -240,6 +252,8 @@ def test_save_app_settings_persists_extended_settings_fields(tmp_path: Path):
     instance.progress_visual_pulse_enabled = False
     instance.progress_visual_wave_enabled = True
     instance.progress_visual_accent_enabled = False
+    instance.lyrics_output_dir = "D:/lyrics-custom"
+    instance.last_scanned_directory = "D:/music-last"
 
     instance.save_app_settings()
 
@@ -252,6 +266,48 @@ def test_save_app_settings_persists_extended_settings_fields(tmp_path: Path):
     assert data["progress_visual_pulse_enabled"] is False
     assert data["progress_visual_wave_enabled"] is True
     assert data["progress_visual_accent_enabled"] is False
+    assert data["lyrics_output_dir"] == "D:/lyrics-custom"
+    assert data["last_scanned_directory"] == "D:/music-last"
+
+
+def test_load_app_settings_restores_lyrics_output_dir_and_last_scan_dir(tmp_path: Path):
+    settings_file = tmp_path / "settings-custom-paths.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "lyrics_output_dir": "D:/lyrics-save",
+                "last_scanned_directory": "D:/music-folder",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    instance = _DummyPersistence(settings_file)
+    instance.load_app_settings()
+
+    assert instance.lyrics_output_dir == "D:/lyrics-save"
+    assert instance.last_scanned_directory == "D:/music-folder"
+
+
+def test_load_app_settings_syncs_lyrics_output_dir_to_service(tmp_path: Path):
+    settings_file = tmp_path / "settings-lyrics-service.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "lyrics_output_dir": "D:/lyrics-save",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    instance = _DummyPersistence(settings_file)
+    instance.lyrics_service = _DummyLyricsService()
+    instance.load_app_settings()
+
+    assert instance.lyrics_output_dir == "D:/lyrics-save"
+    assert instance.lyrics_service.output_dir == "D:/lyrics-save"
 
 
 

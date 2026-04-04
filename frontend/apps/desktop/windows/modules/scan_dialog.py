@@ -14,12 +14,14 @@ from PyQt5.QtWidgets import (
 
 
 class ScanDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_directory="", on_directory_selected=None):
         super().__init__(parent)
         self.setWindowTitle("扫描音乐")
         self.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
         self.resize(760, 520)
         self.scanned_songs = []
+        self.initial_directory = str(initial_directory or "").strip()
+        self.on_directory_selected = on_directory_selected
         self._build_ui()
 
     def _build_ui(self):
@@ -77,9 +79,14 @@ class ScanDialog(QDialog):
         self.set_scanning_state(False)
 
     def _browse_directory(self):
-        directory = QFileDialog.getExistingDirectory(self, "选择音乐文件夹")
+        start_dir = self.directory_input.text().strip() or self.initial_directory
+        directory = QFileDialog.getExistingDirectory(self, "选择音乐文件夹", start_dir)
         if directory:
             self.directory_input.setText(directory)
+            self.initial_directory = directory
+            callback = self.on_directory_selected
+            if callable(callback):
+                callback(directory)
 
     def set_playlist_names(self, names, selected_name=""):
         self.playlist_combo.blockSignals(True)
