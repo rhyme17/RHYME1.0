@@ -3,20 +3,20 @@ set -e
 
 SERVER_DIR="/opt/rhyme"
 DOMAIN="rhyme.rhyme17.top"
-BACKEND_PORT="8001"
 
 echo "========================================="
 echo "  RHYME Music Server - 部署脚本"
 echo "========================================="
 
 echo "[1/7] 安装系统依赖..."
-apt update && apt install -y python3 python3-venv python3-pip nginx git curl wget
+apt update && apt upgrade -y
+apt install -y python3 python3-venv python3-pip nginx git curl wget
 
 echo "[2/7] 部署项目代码..."
 if [ -d "$SERVER_DIR" ]; then
     cd $SERVER_DIR && git pull || true
 else
-    git clone https://github.com/rhyme17/RHYME1.0.git $SERVER_DIR
+    git clone <YOUR_REPO_URL> $SERVER_DIR
 fi
 
 echo "[3/7] 配置后端..."
@@ -36,7 +36,7 @@ mkdir -p data/music data/covers
 echo "[4/7] 构建 Web 前端..."
 cd $SERVER_DIR/frontend-web
 npm install
-npm run build
+VITE_API_BASE_URL=https://$DOMAIN npm run build
 
 echo "[5/7] 配置 systemd 服务..."
 cp $SERVER_DIR/deploy/rhyme-backend.service /etc/systemd/system/
@@ -48,7 +48,8 @@ echo "[6/7] 配置 Nginx..."
 cp $SERVER_DIR/deploy/nginx.conf /etc/nginx/sites-available/rhyme
 rm -f /etc/nginx/sites-enabled/rhyme
 ln -s /etc/nginx/sites-available/rhyme /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl restart nginx
 
 echo "[7/7] 配置 SSL 证书..."
 if [ ! -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then
@@ -62,6 +63,5 @@ echo "  部署完成！"
 echo "========================================="
 echo "  访问地址: https://$DOMAIN"
 echo "  后端状态: systemctl status rhyme-backend"
-echo "  后端端口: $BACKEND_PORT"
 echo "  Nginx日志: tail -f /var/log/nginx/error.log"
 echo "========================================="
