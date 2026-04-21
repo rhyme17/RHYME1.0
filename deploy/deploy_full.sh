@@ -127,7 +127,7 @@ log "步骤5/8: 构建前端项目"
 cd "$FRONTEND_DIR"
 
 log "安装 Node.js 依赖..."
-npm install --production
+npm install
 
 log "构建前端项目..."
 npm run build
