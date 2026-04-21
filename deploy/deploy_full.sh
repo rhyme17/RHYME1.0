@@ -76,9 +76,15 @@ fi
 log "步骤3/8: 克隆项目代码"
 
 if [[ -d "$PROJECT_DIR" ]]; then
-    warn "项目目录已存在，将进行更新..."
-    cd "$PROJECT_DIR"
-    git pull origin main
+    if [[ -d "$PROJECT_DIR/.git" ]]; then
+        warn "项目目录已存在，将进行更新..."
+        cd "$PROJECT_DIR"
+        git pull origin main
+    else
+        warn "项目目录存在但不是 git 仓库，重新克隆..."
+        sudo rm -rf "$PROJECT_DIR"
+        git clone --depth=1 https://github.com/rhyme17/RHYME1.0.git "$PROJECT_DIR"
+    fi
 else
     log "克隆项目到 $PROJECT_DIR..."
     git clone --depth=1 https://github.com/rhyme17/RHYME1.0.git "$PROJECT_DIR"
