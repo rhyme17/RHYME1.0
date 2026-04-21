@@ -8,7 +8,10 @@ from frontend.utils.import_compat import load_attr
 from frontend.utils.logging_utils import get_logger
 from frontend.apps.desktop.windows.modules.settings_contract import (
     clamp_int,
+    normalize_lyrics_font_size,
     normalize_audio_output_strategy,
+    normalize_ui_font_weight,
+    normalize_ui_theme,
     normalize_volume_uniformity_level,
 )
 
@@ -142,6 +145,20 @@ class PersistenceMixin:
         if isinstance(accent_enabled, bool):
             self.progress_visual_accent_enabled = accent_enabled
 
+        self.ui_font_weight = normalize_ui_font_weight(
+            data.get("ui_font_weight", getattr(self, "ui_font_weight", "regular")),
+            default="regular",
+        )
+        self.lyrics_font_size = normalize_lyrics_font_size(
+            data.get("lyrics_font_size", getattr(self, "lyrics_font_size", 18)),
+            default=18,
+        )
+
+        self.ui_theme = normalize_ui_theme(
+            data.get("ui_theme", getattr(self, "ui_theme", "light")),
+            default="light",
+        )
+
         lyrics_output_dir = data.get("lyrics_output_dir")
         if isinstance(lyrics_output_dir, str):
             self.lyrics_output_dir = lyrics_output_dir.strip()
@@ -189,6 +206,9 @@ class PersistenceMixin:
             "progress_visual_pulse_enabled": bool(getattr(self, "progress_visual_pulse_enabled", True)),
             "progress_visual_wave_enabled": bool(getattr(self, "progress_visual_wave_enabled", True)),
             "progress_visual_accent_enabled": bool(getattr(self, "progress_visual_accent_enabled", True)),
+            "ui_font_weight": str(getattr(self, "ui_font_weight", "regular") or "regular"),
+            "lyrics_font_size": int(getattr(self, "lyrics_font_size", 18)),
+            "ui_theme": str(getattr(self, "ui_theme", "light") or "light"),
             "lyrics_output_dir": str(getattr(self, "lyrics_output_dir", "") or ""),
             "last_scanned_directory": str(getattr(self, "last_scanned_directory", "") or ""),
         }
@@ -217,8 +237,11 @@ class PersistenceMixin:
             self.current_song = song
             self._pending_resume_song_id = last_song_id
             self._pending_resume_position_seconds = last_position_seconds
-            self.song_title_label.setText(song.get("title", "未播放"))
-            self.song_artist_label.setText(song.get("artist", "-"))
+            if hasattr(self, "update_song_info_labels"):
+                self.update_song_info_labels(song.get("title", "未播放"), song.get("artist", "-"))
+            else:
+                self.song_title_label.setText(song.get("title", "未播放"))
+                self.song_artist_label.setText(song.get("artist", "-"))
 
             duration = max(0.0, float(song.get("duration", 0.0) or 0.0))
             restore_pos = min(last_position_seconds, duration) if duration > 0 else last_position_seconds

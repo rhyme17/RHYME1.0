@@ -35,7 +35,6 @@ class ScanController:
         if not ScanOrchestrationService.is_valid_directory(directory):
             QMessageBox.warning(owner, "错误", "请选择有效的音乐文件夹")
             return
-
         if hasattr(owner, "_remember_last_scanned_directory"):
             owner._remember_last_scanned_directory(directory)
         else:
@@ -97,6 +96,8 @@ class ScanController:
         owner.repair_imported_song_text(show_message=False)
         songs = [dict(song) for song in owner.music_library.songs]
         owner.scan_results_cache = songs
+        if hasattr(owner, "update_scan_cache_hint"):
+            owner.update_scan_cache_hint()
         dialog.set_scan_results(songs)
         default_name = owner.playlist_manager.get_default_playlist_name(owner.last_scanned_directory)
         if hasattr(dialog, "new_playlist_input") and not dialog.new_playlist_input.text().strip():

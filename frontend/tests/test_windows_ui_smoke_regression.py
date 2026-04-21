@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QSizePolicy
 
 
 QAPP_INSTANCE = None
@@ -1233,6 +1233,121 @@ def test_apply_settings_updates_high_quality_button_and_persists(monkeypatch, tm
         assert calls["save"] == 1
     finally:
         player.close()
+
+
+def test_apply_settings_can_switch_ui_theme(monkeypatch, tmp_path):
+    module = _load_windows_app_module(monkeypatch, tmp_path)
+    _get_qapp()
+
+    player = module.MusicPlayer()
+    try:
+        assert player.ui_theme in ("light", "dark")
+        player.apply_settings({"ui_theme": "dark"}, persist=False)
+        assert player.ui_theme == "dark"
+        player.apply_settings({"ui_theme": "light"}, persist=False)
+        assert player.ui_theme == "light"
+    finally:
+        player.close()
+
+
+def test_dark_theme_uses_white_text_and_alternating_playlist_rows(monkeypatch, tmp_path):
+    module = _load_windows_app_module(monkeypatch, tmp_path)
+    _get_qapp()
+
+    player = module.MusicPlayer()
+    try:
+        player.apply_ui_theme("dark")
+        stylesheet = player.styleSheet()
+        assert "color: #ffffff" in stylesheet
+        assert "QWidget#rootCentralWidget QLabel { color: #ffffff; }" in stylesheet
+        assert "QLabel#currentTimeLabel, QLabel#totalTimeLabel { color: #ffffff; }" in stylesheet
+        assert "alternate-background-color: #1b1f26" in stylesheet or "#1b1f26" in stylesheet
+    finally:
+        player.close()
+
+
+def test_song_info_labels_and_lyrics_font_size_are_configurable(monkeypatch, tmp_path):
+    module = _load_windows_app_module(monkeypatch, tmp_path)
+    _get_qapp()
+
+    player = module.MusicPlayer()
+    try:
+        player.apply_lyrics_font_size(24, reapply_theme=False)
+        player.update_song_info_labels("非常非常非常长的歌曲名称用于测试自动省略效果", "一个也比较长的歌手名称")
+
+        assert player.lyrics_font_size == 24
+        assert player.song_title_label.text()
+        assert player.song_artist_label.text()
+    finally:
+        player.close()
+
+
+def test_song_artist_is_inside_title_metadata_block(monkeypatch, tmp_path):
+    module = _load_windows_app_module(monkeypatch, tmp_path)
+    _get_qapp()
+
+    player = module.MusicPlayer()
+    try:
+        meta_layout = player.song_title_label.parentWidget().layout()
+        assert meta_layout.indexOf(player.song_title_label) == 0
+        assert meta_layout.indexOf(player.song_artist_label) == 1
+        assert meta_layout.stretch(2) == 1
+        assert player.song_title_label.sizePolicy().horizontalPolicy() == QSizePolicy.Minimum
+    finally:
+        player.close()
+
+
+def test_top_bar_does_not_show_scan_cache_text(monkeypatch, tmp_path):
+    module = _load_windows_app_module(monkeypatch, tmp_path)
+    _get_qapp()
+
+    player = module.MusicPlayer()
+    try:
+        assert getattr(player, "scan_cache_hint_label", None) is None
+    finally:
+        player.close()
+
+
+def test_settings_dialog_dark_theme_uses_white_text(monkeypatch, tmp_path):
+    _load_windows_app_module(monkeypatch, tmp_path)
+    _get_qapp()
+
+    from apps.desktop.windows.modules.settings_dialog import SettingsDialog
+
+    dialog = SettingsDialog({"ui_theme": "dark"})
+    try:
+        stylesheet = dialog.styleSheet()
+        assert "color: #ffffff" in stylesheet
+        assert "#11151d" in stylesheet
+        assert "QWidget#settingsScrollContent { background: #11151d; color: #ffffff; }" in stylesheet
+        assert "QGroupBox { background: #161b25; color: #ffffff; border: 1px solid #4a4a4a;" in stylesheet
+    finally:
+        dialog.close()
+
+
+def test_scan_dialog_filter_updates_visible_count(monkeypatch, tmp_path):
+    _load_windows_app_module(monkeypatch, tmp_path)
+    _get_qapp()
+
+    from apps.desktop.windows.modules.scan_dialog import ScanDialog
+
+    dialog = ScanDialog()
+    try:
+        songs = [
+            {"title": "Slow Down", "artist": "Artist A"},
+            {"title": "Hello", "artist": "Artist B"},
+        ]
+        dialog.set_scan_results(songs)
+        dialog.search_input.setText("slow")
+
+        visible = 0
+        for i in range(dialog.results_list.count()):
+            if not dialog.results_list.item(i).isHidden():
+                visible += 1
+        assert visible == 1
+        assert "1/2" in dialog.hint_label.text()
+    finally:
+        dialog.close()
 
 
 

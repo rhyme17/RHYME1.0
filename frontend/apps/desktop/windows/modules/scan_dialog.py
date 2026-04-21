@@ -23,6 +23,35 @@ class ScanDialog(QDialog):
         self.initial_directory = str(initial_directory or "").strip()
         self.on_directory_selected = on_directory_selected
         self._build_ui()
+        self._apply_theme_styles()
+
+    def _detect_theme(self):
+        parent = self.parent()
+        theme = "light"
+        if parent is not None:
+            theme = str(getattr(parent, "ui_theme", "light") or "light")
+        theme = theme.strip().lower()
+        return theme if theme in ("light", "dark") else "light"
+
+    def _apply_theme_styles(self):
+        if self._detect_theme() != "dark":
+            return
+        self.setStyleSheet(
+            "\n".join(
+                [
+                    "QDialog { background: #11151d; color: #ffffff; border: 1px solid #4a4a4a; }",
+                    "QLabel { color: #ffffff; }",
+                    "QLineEdit, QComboBox { background: #20293a; color: #ffffff; border: 1px solid #4a4a4a; border-radius: 6px; padding: 4px 8px; }",
+                    "QLineEdit:focus, QComboBox:focus { border: 1px solid #2f7bff; }",
+                    "QComboBox QAbstractItemView { background: #161b25; color: #ffffff; selection-background-color: #2057c9; selection-color: #ffffff; }",
+                    "QListWidget { background: #10141b; color: #ffffff; border: 1px solid #4a4a4a; border-radius: 8px; }",
+                    "QListWidget::item { color: #ffffff; }",
+                    "QListWidget::item:selected { background: #2057c9; color: #ffffff; }",
+                    "QPushButton { background: #232b39; color: #ffffff; border: 1px solid #4a4a4a; border-radius: 6px; padding: 4px 10px; }",
+                    "QPushButton:hover { background: #2a3445; }",
+                ]
+            )
+        )
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -38,8 +67,19 @@ class ScanDialog(QDialog):
         folder_row.addWidget(self.scan_btn)
 
         result_label = QLabel("扫描结果（可多选）：")
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("搜索歌曲名/歌手")
         self.results_list = QListWidget()
         self.results_list.setSelectionMode(QListWidget.ExtendedSelection)
+
+        select_row = QHBoxLayout()
+        self.select_all_btn = QPushButton("全选")
+        self.invert_select_btn = QPushButton("反选")
+        self.clear_select_btn = QPushButton("清空选择")
+        select_row.addWidget(self.select_all_btn)
+        select_row.addWidget(self.invert_select_btn)
+        select_row.addWidget(self.clear_select_btn)
+        select_row.addStretch()
 
         target_row = QHBoxLayout()
         target_row.addWidget(QLabel("目标歌单："))
@@ -68,6 +108,8 @@ class ScanDialog(QDialog):
 
         layout.addLayout(folder_row)
         layout.addWidget(result_label)
+        layout.addWidget(self.search_input)
+        layout.addLayout(select_row)
         layout.addWidget(self.results_list, 1)
         layout.addLayout(target_row)
         layout.addLayout(create_row)
@@ -75,6 +117,10 @@ class ScanDialog(QDialog):
         layout.addWidget(self.hint_label)
 
         self.browse_btn.clicked.connect(self._browse_directory)
+        self.search_input.textChanged.connect(self._apply_filter)
+        self.select_all_btn.clicked.connect(self._select_all_visible)
+        self.invert_select_btn.clicked.connect(self._invert_visible_selection)
+        self.clear_select_btn.clicked.connect(self.results_list.clearSelection)
         self.close_btn.clicked.connect(self.reject)
         self.set_scanning_state(False)
 
@@ -107,6 +153,7 @@ class ScanDialog(QDialog):
             item.setData(Qt.UserRole, song)
             self.results_list.addItem(item)
         self.hint_label.setText(f"扫描完成，共 {len(self.scanned_songs)} 首")
+        self._apply_filter()
 
     def set_scanning_state(self, is_scanning, message=""):
         scanning = bool(is_scanning)
@@ -144,4 +191,29 @@ class ScanDialog(QDialog):
 
     def suggested_playlist_name(self):
         return self.new_playlist_input.text().strip()
+
+    def _apply_filter(self):
+        keyword = self.search_input.text().strip().lower()
+        visible_count = 0
+        for index in range(self.results_list.count()):
+            item = self.results_list.item(index)
+            text = (item.text() or "").lower()
+            matched = not keyword or keyword in text
+            item.setHidden(not matched)
+            if matched:
+                visible_count += 1
+        self.hint_label.setText(f"扫描结果：{visible_count}/{len(self.scanned_songs)} 首")
+
+    def _select_all_visible(self):
+        for index in range(self.results_list.count()):
+            item = self.results_list.item(index)
+            if not item.isHidden():
+                item.setSelected(True)
+
+    def _invert_visible_selection(self):
+        for index in range(self.results_list.count()):
+            item = self.results_list.item(index)
+            if item.isHidden():
+                continue
+            item.setSelected(not item.isSelected())
 

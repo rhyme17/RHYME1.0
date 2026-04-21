@@ -39,6 +39,31 @@ class ManualLyricsFetchDialog(QDialog):
 
         self.confirm_btn.clicked.connect(self._on_confirm)
         self.cancel_btn.clicked.connect(self.reject)
+        self._apply_theme_styles()
+
+    def _detect_theme(self):
+        parent = self.parent()
+        theme = "light"
+        if parent is not None:
+            theme = str(getattr(parent, "ui_theme", "light") or "light")
+        theme = theme.strip().lower()
+        return theme if theme in ("light", "dark") else "light"
+
+    def _apply_theme_styles(self):
+        if self._detect_theme() != "dark":
+            return
+        self.setStyleSheet(
+            "\n".join(
+                [
+                    "QDialog { background: #11151d; color: #ffffff; border: 1px solid #4a4a4a; }",
+                    "QLabel { color: #ffffff; }",
+                    "QLineEdit { background: #20293a; color: #ffffff; border: 1px solid #4a4a4a; border-radius: 6px; padding: 4px 8px; }",
+                    "QLineEdit:focus { border: 1px solid #2f7bff; }",
+                    "QPushButton { background: #232b39; color: #ffffff; border: 1px solid #4a4a4a; border-radius: 6px; padding: 4px 10px; }",
+                    "QPushButton:hover { background: #2a3445; }",
+                ]
+            )
+        )
 
     def _on_confirm(self):
         if not self.title_text:

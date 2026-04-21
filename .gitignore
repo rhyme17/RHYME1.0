@@ -9,6 +9,7 @@ __pycache__/
 .venv/
 venv/
 env/
+node_modules/
 
 # Test / type / lint caches
 .pytest_cache/
@@ -20,6 +21,7 @@ htmlcov/
 # IDE
 .idea/
 .vscode/
+.trae/
 
 # OS
 .DS_Store
@@ -30,29 +32,50 @@ build/
 dist/
 *.spec
 
-# Project runtime data (desktop app)
+# Backend runtime data
+backend/data/music/
+backend/data/covers/
+backend/data/logs/
+backend/data/database.sqlite
+backend/.env
+
+# Frontend runtime data (desktop app)
 frontend/apps/desktop/windows/playlists.json
 frontend/apps/desktop/windows/settings.json
 frontend/apps/desktop/windows/.lyrics_cache/
-logs/
 
-# Audio and generated files
+# Logs
+logs/
+*.log
+
+# Audio and generated files (keep samples)
 *.wav
 *.mp3
 *.flac
 *.ogg
 *.m4a
 *.lrc
-
-# Keep the root test sample audio tracked
-!test.wav
+!frontend/assets/**/*.ttf
 
 # Local debug dumps
 debug_search.html
 debug_detail.html
 
-# Local test/runtime logs (repo root)
-pytest_*.log
-test_run.log
-tray_test.log
+# Test artifacts
+test.wav
+test_exit.txt
+test_audio.py
+download_music.py
 
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Node.js
+frontend-web/dist/
+frontend-web/.vite/
+
+# Deployment
+deploy/.env

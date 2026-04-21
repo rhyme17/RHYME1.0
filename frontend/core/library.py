@@ -1,6 +1,7 @@
-import os
 import hashlib
+import os
 import re
+
 from mutagen import File
 
 try:
@@ -17,7 +18,55 @@ class MusicLibrary:
         self.supported_formats = {'.wav', '.mp3', '.ogg', '.flac', '.aac', '.m4a'}
         self.last_scan_cancelled = False
         self.last_scan_error = ""
-    
+        self._metadata_cache = {}
+
+    @staticmethod
+    def _file_signature(file_path):
+        try:
+            stat = os.stat(file_path)
+            return int(stat.st_size), int(getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000)))
+        except Exception:
+            return None
+
+    def _get_cached_song_info(self, file_path):
+        signature = self._file_signature(file_path)
+        if signature is None:
+            return None
+        cached = self._metadata_cache.get(file_path)
+        if not cached:
+            return None
+        if cached.get("signature") != signature:
+            return None
+        song_info = cached.get("song")
+        if not isinstance(song_info, dict):
+            return None
+        return dict(song_info)
+
+    def _put_cached_song_info(self, file_path, song_info):
+        signature = self._file_signature(file_path)
+        if signature is None or not isinstance(song_info, dict):
+            return
+        self._metadata_cache[file_path] = {
+            "signature": signature,
+            "song": dict(song_info),
+        }
+
+    def _iter_supported_music_files(self, directory, should_stop, on_walk_error):
+        file_paths = []
+        for root, dirs, files in os.walk(directory, onerror=on_walk_error):
+            if should_stop():
+                return None
+            dirs.sort(key=lambda value: str(value).lower())
+            files.sort(key=lambda value: str(value).lower())
+            for file in files:
+                if should_stop():
+                    return None
+                extension = os.path.splitext(file)[1].lower()
+                if extension not in self.supported_formats:
+                    continue
+                file_paths.append(os.path.abspath(os.path.join(root, file)))
+        return file_paths
+
     def scan_music(self, directory, should_stop=None, on_progress=None):
         """扫描指定目录下的音乐文件"""
         self.songs = []
@@ -44,28 +93,32 @@ class MusicLibrary:
             logger.warning("跳过不可访问目录: %s", error)
 
         try:
-            discovered_total = 0
+            file_paths = self._iter_supported_music_files(directory, _is_cancelled, _walk_error)
+            if file_paths is None:
+                self.last_scan_cancelled = True
+                return False
+
+            total_count = len(file_paths)
             scanned_count = 0
-            for root, dirs, files in os.walk(directory, onerror=_walk_error):
+            for file_path in file_paths:
                 if _is_cancelled():
                     self.last_scan_cancelled = True
                     return False
-                dirs.sort(key=lambda value: str(value).lower())
-                files.sort(key=lambda value: str(value).lower())
-                for file in files:
-                    if _is_cancelled():
-                        self.last_scan_cancelled = True
-                        return False
-                    extension = os.path.splitext(file)[1].lower()
-                    if extension not in self.supported_formats:
-                        continue
-                    discovered_total += 1
-                    file_path = os.path.join(root, file)
-                    file_path = os.path.abspath(file_path)
+
+                song_info = self._get_cached_song_info(file_path)
+                if song_info is None:
                     song_info = self._extract_song_info(file_path)
-                    self.songs.append(song_info)
-                    scanned_count += 1
-                    _report_progress(scanned_count, discovered_total)
+                    self._put_cached_song_info(file_path, song_info)
+
+                self.songs.append(song_info)
+                scanned_count += 1
+                _report_progress(scanned_count, total_count)
+
+            # 扫描后清理缓存中的失效路径，避免常驻增长。
+            scanned_paths = set(file_paths)
+            stale_paths = [path for path in self._metadata_cache if path not in scanned_paths]
+            for path in stale_paths:
+                self._metadata_cache.pop(path, None)
             return True
         except Exception as e:
             self.last_scan_error = str(e)

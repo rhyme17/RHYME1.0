@@ -118,7 +118,6 @@ class PlaybackMixin:
         self.total_time_label.setText(format_time(self.current_duration))
         self.current_song = song
         self._last_progress_save_bucket = -1
-        # 统一在实际开始播放后回写按钮状态，避免残留“加载中...”。
         if getattr(self.audio_player, "is_playing", False):
             self.play_btn.setText("▶" if getattr(self.audio_player, "is_paused", False) else "⏸")
         else:
@@ -131,6 +130,15 @@ class PlaybackMixin:
         self._set_progress_visual_active(True)
         self._push_progress_visual_intensity()
         self.start_progress_timer()
+        self._start_audio_visualizer()
+
+        if hasattr(self, "_update_mini_player_song_info"):
+            title = song.get("title", "未知歌曲")
+            artist = song.get("artist", "未知艺术家")
+            self._update_mini_player_song_info(title, artist)
+        if hasattr(self, "_update_mini_player_playing_state"):
+            is_playing = getattr(self.audio_player, "is_playing", False) and not getattr(self.audio_player, "is_paused", False)
+            self._update_mini_player_playing_state(is_playing)
 
     def _on_decode_worker_finished(self, request_id, success, payload, error_message):
         worker = self.sender() if hasattr(self, "sender") else None
@@ -342,8 +350,11 @@ class PlaybackMixin:
 
             start_position_ms = int(resume_seconds * 1000)
 
-            self.song_title_label.setText(song['title'])
-            self.song_artist_label.setText(song['artist'])
+            if hasattr(self, "update_song_info_labels"):
+                self.update_song_info_labels(song.get('title', ''), song.get('artist', ''))
+            else:
+                self.song_title_label.setText(song['title'])
+                self.song_artist_label.setText(song['artist'])
             self.play_btn.setText("⏸")
 
             self.total_time_label.setText(format_time(self.current_duration))
@@ -432,6 +443,7 @@ class PlaybackMixin:
             self.progress_slider.setValue(0)
             self.current_time_label.setText("0:00")
             self.update_lyrics_view(0)
+            self._stop_audio_visualizer()
             self.play_next()
             return
 
@@ -450,6 +462,7 @@ class PlaybackMixin:
         self._push_progress_visual_intensity()
         self.current_time_label.setText(format_time(current_time))
         self.update_lyrics_view(current_time)
+        self._update_audio_visualizer()
 
     def toggle_play(self):
         if self.audio_player.is_playing and self.audio_player.is_paused:
@@ -457,6 +470,9 @@ class PlaybackMixin:
                 self.play_btn.setText("⏸")
                 self._set_progress_visual_active(True)
                 self._push_progress_visual_intensity()
+                self._start_audio_visualizer()
+                if hasattr(self, "_update_mini_player_playing_state"):
+                    self._update_mini_player_playing_state(True)
             return
 
         if self.audio_player.is_playing:
@@ -464,6 +480,9 @@ class PlaybackMixin:
                 self.play_btn.setText("▶")
                 self._set_progress_visual_active(False)
                 self._push_progress_visual_intensity()
+                self._stop_audio_visualizer()
+                if hasattr(self, "_update_mini_player_playing_state"):
+                    self._update_mini_player_playing_state(False)
                 if hasattr(self, "schedule_save_app_settings"):
                     self.schedule_save_app_settings()
             return
@@ -486,6 +505,20 @@ class PlaybackMixin:
         self.play_current_song()
 
     def play_next(self):
+        next_song = self.get_next_song_from_queue() if hasattr(self, "get_next_song_from_queue") else None
+        if next_song:
+            playlist = self.playlist_manager.get_playlist()
+            index = self._resolve_song_index_by_id_or_path(playlist, next_song) if hasattr(self, "_resolve_song_index_by_id_or_path") else -1
+            if index >= 0:
+                self.current_track_index = index
+            else:
+                self.playlist_manager.add_songs([next_song])
+                self.current_track_index = len(self.playlist_manager.get_playlist()) - 1
+                self.render_playlist()
+                self.save_playlists()
+            self.play_current_song()
+            return
+
         playlist = self.playlist_manager.get_playlist()
         if not playlist:
             return
@@ -499,8 +532,25 @@ class PlaybackMixin:
         self.play_current_song()
 
     def set_volume(self, value, persist=True):
-        volume = PlayerOrchestrationService.map_slider_volume_to_gain(value)
-        self.audio_player.set_volume(volume)
+        target_volume = PlayerOrchestrationService.map_slider_volume_to_gain(value)
+        current_volume = float(getattr(self.audio_player, "volume", 1.0) or 1.0)
+
+        if not hasattr(self, "_volume_animation_timer"):
+            self._volume_animation_timer = QTimer(self)
+            self._volume_animation_timer.timeout.connect(self._animate_volume_step)
+            self._volume_animation_timer.setInterval(16)
+            self._volume_animation_steps = 0
+            self._volume_animation_current = current_volume
+            self._volume_animation_target = target_volume
+
+        if abs(target_volume - current_volume) < 0.01:
+            self.audio_player.set_volume(target_volume)
+        else:
+            self._volume_animation_current = current_volume
+            self._volume_animation_target = target_volume
+            self._volume_animation_steps = 0
+            if not self._volume_animation_timer.isActive():
+                self._volume_animation_timer.start()
 
         if value == 0:
             self.mute_btn.setText("🔇")
@@ -510,11 +560,32 @@ class PlaybackMixin:
             self.is_muted = False
             self.last_volume = value
 
+        if hasattr(self, "_update_mini_player_volume"):
+            self._update_mini_player_volume(value)
+
         if persist:
             if hasattr(self, "schedule_save_app_settings"):
                 self.schedule_save_app_settings()
             elif hasattr(self, "save_app_settings"):
                 self.save_app_settings()
+
+    def _animate_volume_step(self):
+        if not hasattr(self, "_volume_animation_timer"):
+            return
+        if not hasattr(self, "audio_player"):
+            self._volume_animation_timer.stop()
+            return
+
+        self._volume_animation_steps += 1
+        max_steps = 10
+        if self._volume_animation_steps >= max_steps:
+            self.audio_player.set_volume(self._volume_animation_target)
+            self._volume_animation_timer.stop()
+            return
+
+        progress = self._volume_animation_steps / max_steps
+        current = self._volume_animation_current + (self._volume_animation_target - self._volume_animation_current) * progress
+        self.audio_player.set_volume(current)
 
     def toggle_mute(self):
         if self.is_muted:
@@ -573,6 +644,46 @@ class PlaybackMixin:
         self.current_time_label.setText(format_time(target))
         self.audio_player.seek(target)
         self.update_lyrics_view(target)
+        if hasattr(self, "schedule_save_app_settings"):
+            self.schedule_save_app_settings()
+
+    def _start_audio_visualizer(self):
+        if not hasattr(self, "audio_visualizer"):
+            return
+        visualizer_enabled = bool(getattr(self, "audio_visualizer_enabled", True))
+        if not visualizer_enabled:
+            return
+        self.audio_visualizer.set_active(True)
+        self.audio_visualizer.set_visualizer_visible(True)
+
+    def _stop_audio_visualizer(self):
+        if not hasattr(self, "audio_visualizer"):
+            return
+        self.audio_visualizer.set_active(False)
+
+    def _update_audio_visualizer(self):
+        if not hasattr(self, "audio_visualizer"):
+            return
+        if not hasattr(self, "audio_player"):
+            return
+        if not getattr(self.audio_player, "is_playing", False):
+            return
+        if getattr(self.audio_player, "is_paused", False):
+            return
+        spectrum_data = self.audio_player.get_spectrum_data()
+        if spectrum_data is not None:
+            self.audio_visualizer.update_spectrum(spectrum_data)
+
+    def set_audio_visualizer_enabled(self, enabled):
+        self.audio_visualizer_enabled = bool(enabled)
+        if hasattr(self, "audio_visualizer"):
+            if self.audio_visualizer_enabled:
+                if hasattr(self, "audio_player") and getattr(self.audio_player, "is_playing", False):
+                    if not getattr(self.audio_player, "is_paused", False):
+                        self._start_audio_visualizer()
+            else:
+                self.audio_visualizer.set_visualizer_visible(False)
+                self._stop_audio_visualizer()
         if hasattr(self, "schedule_save_app_settings"):
             self.schedule_save_app_settings()
 

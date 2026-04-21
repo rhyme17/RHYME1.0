@@ -78,3 +78,30 @@ def format_timestamp(time_ms):
     return f"[{minutes:02d}:{seconds:02d}.{centiseconds:02d}]"
 
 
+def apply_offset_to_lines(lines, offset_ms):
+    if not lines or offset_ms == 0:
+        return lines
+    adjusted = []
+    for line in lines:
+        new_time = line.time_ms + offset_ms
+        if new_time >= 0:
+            adjusted.append(LyricLine(time_ms=new_time, text=line.text))
+    adjusted.sort(key=lambda item: item.time_ms)
+    return adjusted
+
+
+def write_lrc_file(file_path, lines, metadata=None):
+    try:
+        os.makedirs(os.path.dirname(file_path) if os.path.dirname(file_path) else ".", exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            if metadata:
+                for key, value in metadata.items():
+                    f.write(f"[{key}:{value}]\n")
+            for line in lines:
+                timestamp = format_timestamp(line.time_ms)
+                f.write(f"{timestamp}{line.text}\n")
+        return True
+    except Exception:
+        return False
+
+

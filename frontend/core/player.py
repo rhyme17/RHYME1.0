@@ -1,17 +1,17 @@
-from collections import OrderedDict
-from contextlib import contextmanager
 import math
 import os
 import sys
 import threading
 import time
+from collections import OrderedDict
+from contextlib import contextmanager
 
-from mutagen import File as MutagenFile
 import numpy as np
+import sounddevice as sd
+from mutagen import File as MutagenFile
 from pydub import AudioSegment
 from pydub import audio_segment as pydub_audio_segment
 from pydub import utils as pydub_utils
-import sounddevice as sd
 
 try:
     from frontend.utils.logging_utils import get_logger
@@ -53,6 +53,8 @@ class AudioPlayer:
 
         self._decoded_cache = OrderedDict()
         self._decoded_cache_max_items = 6
+        self._duration_hint_cache = OrderedDict()
+        self._duration_hint_cache_max_items = 512
 
         self._active_output_device_signature = None
         self._last_recover_attempt_monotonic = 0.0
@@ -62,6 +64,21 @@ class AudioPlayer:
 
         self._visual_intensity = 0.0
         self._visual_accent = 0.0
+
+        self._spectrum_data = None
+        self._spectrum_bar_count = 64
+        self._spectrum_smoothing = 0.3
+        self._smoothed_spectrum = None
+        self._spectrum_lock = threading.Lock()
+
+        self.fade_in_enabled = True
+        self.fade_out_enabled = True
+        self.fade_duration_ms = 1000
+        self._fade_volume = 1.0
+        self._fade_target_volume = 1.0
+        self._fade_start_time = 0.0
+        self._fade_duration_frames = 0
+        self._fade_frames_elapsed = 0
 
     def set_high_quality_output_mode(self, enabled):
         self.prefer_high_quality_output = bool(enabled)
@@ -130,6 +147,32 @@ class AudioPlayer:
             return None
         self._decoded_cache.move_to_end(file_path)
         return cached
+
+    def _get_cached_duration_hint(self, file_path):
+        cached = self._duration_hint_cache.get(file_path)
+        if not cached:
+            return None
+        signature = self._get_file_signature(file_path)
+        if signature is None or cached.get("signature") != signature:
+            self._duration_hint_cache.pop(file_path, None)
+            return None
+        self._duration_hint_cache.move_to_end(file_path)
+        try:
+            return float(cached.get("duration", 0.0) or 0.0)
+        except Exception:
+            return None
+
+    def _put_cached_duration_hint(self, file_path, duration_seconds):
+        signature = self._get_file_signature(file_path)
+        if signature is None:
+            return
+        self._duration_hint_cache[file_path] = {
+            "signature": signature,
+            "duration": float(max(0.0, float(duration_seconds or 0.0))),
+        }
+        self._duration_hint_cache.move_to_end(file_path)
+        while len(self._duration_hint_cache) > int(self._duration_hint_cache_max_items):
+            self._duration_hint_cache.popitem(last=False)
 
     def has_decoded_cache(self, file_path):
         return self._get_cached_decoded(file_path) is not None
@@ -212,6 +255,7 @@ class AudioPlayer:
                 self.is_playing = True
                 self.is_paused = False
                 self._reset_visual_metrics()
+                self._start_fade_in()
 
             self._build_stream()
             self._active_output_device_signature = self.get_default_output_device_signature()
@@ -342,6 +386,9 @@ class AudioPlayer:
     def _reset_visual_metrics(self):
         self._visual_intensity = 0.0
         self._visual_accent = 0.0
+        with self._spectrum_lock:
+            self._spectrum_data = None
+            self._smoothed_spectrum = None
 
     def _update_visual_metrics_from_chunk(self, chunk):
         if chunk is None:
@@ -352,6 +399,9 @@ class AudioPlayer:
         if data.size <= 0:
             self._visual_intensity *= 0.75
             self._visual_accent *= 0.62
+            with self._spectrum_lock:
+                if self._smoothed_spectrum is not None:
+                    self._smoothed_spectrum *= 0.75
             return
 
         if data.ndim > 1:
@@ -365,11 +415,99 @@ class AudioPlayer:
         gradient = np.abs(np.diff(mono)) if mono.size > 1 else np.array([0.0], dtype=np.float32)
         transient = float(np.max(gradient)) if gradient.size > 0 else 0.0
         transient_norm = max(0.0, min(1.0, transient / 0.25))
-        # Keep accent responsive even for sustained high-energy chunks.
         transient_norm = max(transient_norm, intensity * 0.45)
 
         self._visual_intensity = max(intensity, self._visual_intensity * 0.82)
         self._visual_accent = max(transient_norm, self._visual_accent * 0.62)
+
+        self._compute_spectrum(mono)
+
+    def _compute_spectrum(self, mono_data):
+        if mono_data is None or mono_data.size < 64:
+            return
+
+        try:
+            n_fft = min(2048, len(mono_data))
+            fft_result = np.fft.rfft(mono_data[:n_fft])
+            magnitude = np.abs(fft_result)
+
+            freq_bins = len(magnitude)
+            if freq_bins <= 0:
+                return
+
+            target_bins = self._spectrum_bar_count
+            indices = np.linspace(0, freq_bins - 1, target_bins, dtype=int)
+            spectrum = magnitude[indices]
+
+            max_val = float(np.max(spectrum))
+            if max_val > 1e-6:
+                spectrum = spectrum / max_val
+            else:
+                spectrum = np.zeros_like(spectrum)
+
+            spectrum = np.clip(spectrum, 0.0, 1.0)
+
+            with self._spectrum_lock:
+                self._spectrum_data = spectrum
+                if self._smoothed_spectrum is None:
+                    self._smoothed_spectrum = spectrum.copy()
+                else:
+                    self._smoothed_spectrum = (
+                        self._spectrum_smoothing * spectrum +
+                        (1.0 - self._spectrum_smoothing) * self._smoothed_spectrum
+                    )
+        except Exception:
+            pass
+
+    def get_spectrum_data(self):
+        with self._spectrum_lock:
+            if self._smoothed_spectrum is not None:
+                return self._smoothed_spectrum.copy()
+            return None
+
+    def set_spectrum_bar_count(self, count):
+        count = max(8, min(256, int(count)))
+        if count != self._spectrum_bar_count:
+            self._spectrum_bar_count = count
+            with self._spectrum_lock:
+                self._spectrum_data = None
+                self._smoothed_spectrum = None
+
+    def set_fade_config(self, fade_in_enabled=None, fade_out_enabled=None, fade_duration_ms=None):
+        if fade_in_enabled is not None:
+            self.fade_in_enabled = bool(fade_in_enabled)
+        if fade_out_enabled is not None:
+            self.fade_out_enabled = bool(fade_out_enabled)
+        if fade_duration_ms is not None:
+            self.fade_duration_ms = max(0, min(5000, int(fade_duration_ms)))
+
+    def _start_fade_in(self):
+        if not self.fade_in_enabled or self.fade_duration_ms <= 0:
+            self._fade_volume = 1.0
+            return
+        self._fade_volume = 0.0
+        self._fade_target_volume = 1.0
+        self._fade_frames_elapsed = 0
+        self._fade_duration_frames = int(self._sample_rate * self.fade_duration_ms / 1000.0)
+
+    def _start_fade_out(self):
+        if not self.fade_out_enabled or self.fade_duration_ms <= 0:
+            return False
+        self._fade_target_volume = 0.0
+        self._fade_frames_elapsed = 0
+        self._fade_duration_frames = int(self._sample_rate * self.fade_duration_ms / 1000.0)
+        return True
+
+    def _update_fade_volume(self, frames):
+        if self._fade_duration_frames <= 0:
+            return
+        self._fade_frames_elapsed += frames
+        progress = min(1.0, self._fade_frames_elapsed / self._fade_duration_frames)
+        if self._fade_target_volume > self._fade_volume:
+            self._fade_volume = progress
+        else:
+            self._fade_volume = 1.0 - progress
+        self._fade_volume = max(0.0, min(1.0, self._fade_volume))
 
     def _build_stream(self):
         def callback(outdata, frames, _time_info, _status):
@@ -388,8 +526,9 @@ class AudioPlayer:
                 end = min(start + frames, self._total_frames)
                 chunk = self._audio_data[start:end]
                 gain = float(getattr(self, "_current_track_normalize_gain", 1.0) or 1.0)
-                chunk = chunk * float(self.volume) * gain
+                chunk = chunk * float(self.volume) * gain * float(self._fade_volume)
                 self._update_visual_metrics_from_chunk(chunk)
+                self._update_fade_volume(frames)
 
                 chunk_len = len(chunk)
                 outdata[:chunk_len] = chunk
@@ -619,22 +758,41 @@ class AudioPlayer:
     def get_duration(self, file_path):
         if self.current_file == file_path and self._duration_seconds > 0:
             return self._duration_seconds
+
+        cached_hint = self._get_cached_duration_hint(file_path)
+        if cached_hint is not None and cached_hint > 0:
+            return cached_hint
+
+        hinted = self.get_duration_hint(file_path)
+        if hinted > 0:
+            return hinted
+
         try:
             audio = self._decode_audio_segment(file_path)
-            return len(audio) / 1000.0
+            duration = len(audio) / 1000.0
+            if duration > 0:
+                self._put_cached_duration_hint(file_path, duration)
+            return duration
         except Exception:
             return 0.0
 
     def get_duration_hint(self, file_path):
         if self.current_file == file_path and self._duration_seconds > 0:
             return self._duration_seconds
+
+        cached_hint = self._get_cached_duration_hint(file_path)
+        if cached_hint is not None:
+            return cached_hint
+
         try:
             audio = MutagenFile(file_path)
             duration = float(getattr(getattr(audio, "info", None), "length", 0.0) or 0.0)
             if duration > 0:
+                self._put_cached_duration_hint(file_path, duration)
                 return duration
         except Exception:
             pass
+        self._put_cached_duration_hint(file_path, 0.0)
         return 0.0
 
     def get_position(self):

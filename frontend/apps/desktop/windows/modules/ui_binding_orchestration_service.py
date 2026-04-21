@@ -23,6 +23,7 @@ class UiBindingOrchestrationService:
     @staticmethod
     def bind_top_actions(player):
         UiBindingOrchestrationService._connect_if_present(player, "open_scan_dialog_btn", "clicked", "open_scan_dialog")
+        UiBindingOrchestrationService._connect_if_present(player, "online_search_btn", "clicked", "open_online_search")
         UiBindingOrchestrationService._connect_if_present(player, "create_playlist_btn", "clicked", "create_empty_playlist")
         UiBindingOrchestrationService._connect_if_present(player, "settings_btn", "clicked", "open_settings_dialog")
         UiBindingOrchestrationService._connect_if_present(player, "rename_playlist_btn", "clicked", "rename_selected_playlist")
@@ -46,8 +47,11 @@ class UiBindingOrchestrationService:
         player.undo_reorder_btn.clicked.connect(player.undo_last_reorder)
         player.playlists_tree.itemClicked.connect(player.on_playlist_tree_item_clicked)
         player.playlists_tree.itemDoubleClicked.connect(player.on_playlist_tree_item_double_clicked)
+        player.playlists_tree.sort_requested.connect(player.sort_playlists)
         player.playlist_list.itemDoubleClicked.connect(lambda item, _column: player.play_song_from_playlist(item))
         player.playlist_list.model().rowsMoved.connect(player.on_playlist_rows_moved)
+        player.playlist_list.files_dropped.connect(player.handle_dropped_files)
+        player.playlist_list.play_next_requested.connect(player.add_to_play_next_queue)
 
     @staticmethod
     def bind_lyrics_and_playback_actions(player):
@@ -65,4 +69,11 @@ class UiBindingOrchestrationService:
         player.volume_slider.valueChanged.connect(player.set_volume)
         player.mode_btn.clicked.connect(player.toggle_playback_mode)
         player.high_quality_btn.clicked.connect(player.toggle_high_quality_output)
+
+        UiBindingOrchestrationService._connect_if_present(player, "lyrics_offset_backward_btn", "clicked", "adjust_lyrics_offset_backward")
+        UiBindingOrchestrationService._connect_if_present(player, "lyrics_offset_forward_btn", "clicked", "adjust_lyrics_offset_forward")
+        UiBindingOrchestrationService._connect_if_present(player, "lyrics_offset_reset_btn", "clicked", "reset_lyrics_offset")
+        UiBindingOrchestrationService._connect_if_present(player, "edit_lyrics_btn", "clicked", "open_lyrics_editor")
+        UiBindingOrchestrationService._connect_if_present(player, "desktop_lyrics_btn", "clicked", "toggle_desktop_lyrics")
+        UiBindingOrchestrationService._connect_if_present(player, "mini_mode_btn", "clicked", "toggle_mini_mode")
 

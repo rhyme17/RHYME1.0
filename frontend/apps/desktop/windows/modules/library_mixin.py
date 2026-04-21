@@ -1,12 +1,13 @@
 import os
 
-from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-from frontend.apps.desktop.windows.modules.scan_controller import ScanController
-from frontend.apps.desktop.windows.modules.player_orchestration_service import PlayerOrchestrationService
 from frontend.apps.desktop.windows.modules.library_orchestration_service import LibraryOrchestrationService
+from frontend.apps.desktop.windows.modules.player_orchestration_service import PlayerOrchestrationService
+from frontend.apps.desktop.windows.modules.scan_controller import ScanController
 from frontend.apps.desktop.windows.modules.scan_dialog import ScanDialog
+from frontend.apps.desktop.windows.modules.scan_worker import ScanWorker
 
 
 class LibraryMixin:
@@ -204,8 +205,11 @@ class LibraryMixin:
 
         normalized_current_song = LibraryOrchestrationService.sync_current_song_metadata(self.current_song, normalized_by_id)
         if normalized_current_song:
-            self.song_title_label.setText(normalized_current_song['title'])
-            self.song_artist_label.setText(normalized_current_song['artist'])
+            if hasattr(self, "update_song_info_labels"):
+                self.update_song_info_labels(normalized_current_song['title'], normalized_current_song['artist'])
+            else:
+                self.song_title_label.setText(normalized_current_song['title'])
+                self.song_artist_label.setText(normalized_current_song['artist'])
 
         if self.search_input.text().strip():
             self.search_music()
@@ -302,4 +306,32 @@ class LibraryMixin:
         self._pending_resume_song_id = ""
         self._pending_resume_position_seconds = 0.0
         self.play_current_song(force_restart=True)
+
+    def handle_dropped_files(self, file_paths):
+        if not file_paths:
+            return
+
+        from frontend.core.library import MusicLibrary
+        from frontend.core.lrc_parser import parse_lrc_file
+
+        songs = []
+        for file_path in file_paths:
+            if not os.path.isfile(file_path):
+                continue
+
+            song_info = MusicLibrary.parse_audio_file(file_path)
+            if song_info:
+                songs.append(song_info)
+
+        if not songs:
+            return
+
+        self.playlist_manager.add_songs(songs)
+        self.render_playlist()
+        self.save_playlists()
+
+        if hasattr(self, "schedule_save_app_settings"):
+            self.schedule_save_app_settings()
+
+        QMessageBox.information(self, "添加成功", f"已添加 {len(songs)} 首歌曲到当前歌单")
 

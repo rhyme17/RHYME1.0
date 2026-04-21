@@ -73,6 +73,8 @@ class _DummyPersistence(PersistenceMixin):
         self.progress_visual_pulse_enabled = True
         self.progress_visual_wave_enabled = True
         self.progress_visual_accent_enabled = True
+        self.ui_font_weight = "regular"
+        self.lyrics_font_size = 18
         self.lyrics_output_dir = ""
         self.last_scanned_directory = ""
         self._pending_resume_song_id = ""
@@ -252,6 +254,8 @@ def test_save_app_settings_persists_extended_settings_fields(tmp_path: Path):
     instance.progress_visual_pulse_enabled = False
     instance.progress_visual_wave_enabled = True
     instance.progress_visual_accent_enabled = False
+    instance.ui_font_weight = "medium"
+    instance.lyrics_font_size = 21
     instance.lyrics_output_dir = "D:/lyrics-custom"
     instance.last_scanned_directory = "D:/music-last"
 
@@ -266,6 +270,8 @@ def test_save_app_settings_persists_extended_settings_fields(tmp_path: Path):
     assert data["progress_visual_pulse_enabled"] is False
     assert data["progress_visual_wave_enabled"] is True
     assert data["progress_visual_accent_enabled"] is False
+    assert data["ui_font_weight"] == "medium"
+    assert data["lyrics_font_size"] == 21
     assert data["lyrics_output_dir"] == "D:/lyrics-custom"
     assert data["last_scanned_directory"] == "D:/music-last"
 
@@ -308,6 +314,42 @@ def test_load_app_settings_syncs_lyrics_output_dir_to_service(tmp_path: Path):
 
     assert instance.lyrics_output_dir == "D:/lyrics-save"
     assert instance.lyrics_service.output_dir == "D:/lyrics-save"
+
+
+def test_load_app_settings_restores_ui_font_weight(tmp_path: Path):
+    settings_file = tmp_path / "settings-font-weight.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "ui_font_weight": "light",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    instance = _DummyPersistence(settings_file)
+    instance.load_app_settings()
+
+    assert instance.ui_font_weight == "light"
+
+
+def test_load_app_settings_restores_lyrics_font_size(tmp_path: Path):
+    settings_file = tmp_path / "settings-lyrics-font-size.json"
+    settings_file.write_text(
+        json.dumps(
+            {
+                "lyrics_font_size": 26,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    instance = _DummyPersistence(settings_file)
+    instance.load_app_settings()
+
+    assert instance.lyrics_font_size == 26
 
 
 

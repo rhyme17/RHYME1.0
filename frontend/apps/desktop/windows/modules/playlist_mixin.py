@@ -453,3 +453,48 @@ class PlaylistMixin:
         self.render_playlist_names(select_name=self.playlist_manager.get_playlist_name())
         self.save_playlists()
 
+    def add_to_play_next_queue(self, song):
+        if not song:
+            return
+        self._play_next_queue.append(song)
+        title = self._display_song_title(song)
+        QMessageBox.information(self, "添加成功", f"已将「{title}」添加到下一首播放")
+
+    def get_next_song_from_queue(self):
+        if self._play_next_queue:
+            return self._play_next_queue.pop(0)
+        return None
+
+    def clear_play_next_queue(self):
+        self._play_next_queue = []
+
+    def sort_playlists(self, sort_by):
+        playlist_names = self.playlist_manager.list_playlist_names()
+        if not playlist_names:
+            return
+
+        if sort_by == "name_asc":
+            sorted_names = sorted(playlist_names)
+        elif sort_by == "name_desc":
+            sorted_names = sorted(playlist_names, reverse=True)
+        elif sort_by == "count_asc":
+            sorted_names = sorted(playlist_names, key=lambda name: len(self.playlist_manager.get_playlist_by_name(name) or []))
+        elif sort_by == "count_desc":
+            sorted_names = sorted(playlist_names, key=lambda name: len(self.playlist_manager.get_playlist_by_name(name) or []), reverse=True)
+        else:
+            return
+
+        self.playlist_manager.reorder_playlists(sorted_names)
+        self.render_playlist_names(select_name=self.playlist_manager.get_playlist_name())
+        self.save_playlists()
+        QMessageBox.information(self, "排序完成", f"已按{self._get_sort_description(sort_by)}排序")
+
+    def _get_sort_description(self, sort_by):
+        descriptions = {
+            "name_asc": "名称升序",
+            "name_desc": "名称降序",
+            "count_asc": "歌曲数升序",
+            "count_desc": "歌曲数降序",
+        }
+        return descriptions.get(sort_by, "未知排序")
+

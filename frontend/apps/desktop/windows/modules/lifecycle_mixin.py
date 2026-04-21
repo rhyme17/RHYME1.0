@@ -13,6 +13,11 @@ class LifecycleMixin:
         if self.timer is not None and not self.timer.isActive():
             self.timer.start(100)
         self._ui_timer_started = True
+
+        if not getattr(self, "_network_monitor_initialized", False) and hasattr(self, "init_network_monitor"):
+            self.init_network_monitor()
+            self._network_monitor_initialized = True
+
         super().showEvent(event)
 
     def update_ui(self):
@@ -50,6 +55,9 @@ class LifecycleMixin:
             self.timer.stop()
         if getattr(self, "progress_timer", None) is not None and self.progress_timer.isActive():
             self.progress_timer.stop()
+        network_timer = getattr(self, "_network_check_timer", None)
+        if network_timer is not None and network_timer.isActive():
+            network_timer.stop()
         if self.scan_worker and self.scan_worker.isRunning():
             self.scan_worker.requestInterruption()
             self.scan_worker.quit()

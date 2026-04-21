@@ -57,6 +57,7 @@ class LyricsMixin:
             self.current_lyrics_index = -1
             self.current_lyrics_source = result.source
             self.lyrics_asr_available = bool(self.lyrics_service.is_asr_available())
+            self._update_lyrics_offset_display()
         except Exception as exc:
             logger.exception("歌词加载失败: song_id=%s", song.get("id", ""))
             self.clear_lyrics(f"暂无歌词（加载失败：{exc}）")
@@ -421,10 +422,21 @@ class LyricsMixin:
         self.current_lyrics_index = target_index
         if target_index < 0:
             self.lyric_label.setText("...")
+            self._update_desktop_lyrics("...", "")
+            if hasattr(self, "_update_mini_player_lyric"):
+                self._update_mini_player_lyric("...")
             return
 
         line = self.current_lyrics_lines[target_index]
         self.lyric_label.setText(line.text or "...")
+
+        next_line = ""
+        if target_index + 1 < len(self.current_lyrics_lines):
+            next_line = self.current_lyrics_lines[target_index + 1].text or ""
+        self._update_desktop_lyrics(line.text or "...", next_line)
+
+        if hasattr(self, "_update_mini_player_lyric"):
+            self._update_mini_player_lyric(line.text or "...")
 
     def _start_lyrics_asr(self, song):
         if getattr(self, "_is_closing", False):
@@ -569,4 +581,158 @@ class LyricsMixin:
             fetch_worker.deleteLater()
         if fetch_worker is not None:
             self.lyrics_fetch_worker = None
+
+    def adjust_lyrics_offset(self, delta_ms):
+        if not self.current_song:
+            self._show_lyrics_hint("请先播放歌曲", timeout_ms=2200)
+            return
+        if not self.current_lyrics_lines:
+            self._show_lyrics_hint("当前无歌词", timeout_ms=2200)
+            return
+
+        song_id = self.current_song.get("id", "")
+        if not song_id:
+            self._show_lyrics_hint("无法获取歌曲ID", timeout_ms=2200)
+            return
+
+        new_offset = self.lyrics_service.offset_manager.adjust_offset(song_id, delta_ms)
+        self.load_lyrics_for_song(self.current_song)
+        current_time = self.audio_player.get_position()
+        self.update_lyrics_view(current_time)
+
+        offset_text = self._format_offset_display(new_offset)
+        self._show_lyrics_hint(f"歌词偏移: {offset_text}", timeout_ms=2000)
+
+    def adjust_lyrics_offset_forward(self):
+        self.adjust_lyrics_offset(500)
+
+    def adjust_lyrics_offset_backward(self):
+        self.adjust_lyrics_offset(-500)
+
+    def reset_lyrics_offset(self):
+        if not self.current_song:
+            self._show_lyrics_hint("请先播放歌曲", timeout_ms=2200)
+            return
+
+        song_id = self.current_song.get("id", "")
+        if not song_id:
+            self._show_lyrics_hint("无法获取歌曲ID", timeout_ms=2200)
+            return
+
+        self.lyrics_service.offset_manager.reset_offset(song_id)
+        self.load_lyrics_for_song(self.current_song)
+        current_time = self.audio_player.get_position()
+        self.update_lyrics_view(current_time)
+        self._show_lyrics_hint("歌词偏移已重置", timeout_ms=2000)
+
+    def get_current_lyrics_offset(self):
+        if not self.current_song:
+            return 0
+        song_id = self.current_song.get("id", "")
+        if not song_id:
+            return 0
+        return self.lyrics_service.offset_manager.get_offset(song_id)
+
+    def _format_offset_display(self, offset_ms):
+        if offset_ms == 0:
+            return "0ms"
+        sign = "+" if offset_ms > 0 else ""
+        seconds = abs(offset_ms) / 1000.0
+        if seconds >= 1.0:
+            return f"{sign}{seconds:.1f}s"
+        else:
+            return f"{sign}{offset_ms}ms"
+
+    def _update_lyrics_offset_display(self):
+        if not hasattr(self, "lyrics_offset_label"):
+            return
+        offset = self.get_current_lyrics_offset()
+        offset_text = self._format_offset_display(offset)
+        self.lyrics_offset_label.setText(f"偏移: {offset_text}")
+
+    def open_lyrics_editor(self):
+        if not self.current_song:
+            self._show_lyrics_hint("请先播放歌曲", timeout_ms=2200)
+            return
+
+        if not self.current_lyrics_lines:
+            reply = QMessageBox.question(
+                self,
+                "提示",
+                "当前歌曲没有歌词，是否创建新歌词？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if reply != QMessageBox.Yes:
+                return
+            lyrics_lines = []
+        else:
+            lyrics_lines = self.current_lyrics_lines
+
+        from PyQt5.QtWidgets import QMessageBox
+
+        try:
+            from frontend.apps.desktop.windows.modules.lyrics_editor_dialog import LyricsEditorDialog
+        except ModuleNotFoundError:
+            from apps.desktop.windows.modules.lyrics_editor_dialog import LyricsEditorDialog
+
+        song_info = {
+            "title": self.current_song.get("title", "未知歌曲"),
+            "artist": self.current_song.get("artist", "未知艺术家"),
+        }
+
+        lrc_file_path = ""
+        if self.current_lyrics_source == "local":
+            lrc_file_path = self.lyrics_service._find_local_lrc(self.current_song)
+        elif self.current_lyrics_source == "asr-cache":
+            lrc_file_path = self.lyrics_service.get_cache_lrc_path(self.current_song)
+
+        editor = LyricsEditorDialog(
+            self, lyrics_lines=lyrics_lines, song_info=song_info, lrc_file_path=lrc_file_path
+        )
+        editor.lyrics_saved.connect(self._on_lyrics_editor_saved)
+        editor.exec_()
+
+    def _on_lyrics_editor_saved(self, file_path):
+        if not self.current_song:
+            return
+
+        self.lyrics_service.offset_manager.reset_offset(self.current_song.get("id", ""))
+        self.load_lyrics_for_song(self.current_song)
+        current_time = self.audio_player.get_position()
+        self.update_lyrics_view(current_time)
+        self._show_lyrics_hint("歌词已保存并重新加载", timeout_ms=2000)
+
+    def _init_desktop_lyrics(self):
+        if hasattr(self, "_desktop_lyrics_window"):
+            return
+        try:
+            from frontend.apps.desktop.windows.modules.desktop_lyrics_window import DesktopLyricsWindow
+        except ModuleNotFoundError:
+            from apps.desktop.windows.modules.desktop_lyrics_window import DesktopLyricsWindow
+
+        self._desktop_lyrics_window = DesktopLyricsWindow(self)
+        self._desktop_lyrics_visible = False
+
+    def toggle_desktop_lyrics(self):
+        self._init_desktop_lyrics()
+
+        if self._desktop_lyrics_visible:
+            self._desktop_lyrics_window.hide_lyrics()
+            self._desktop_lyrics_visible = False
+            self._show_lyrics_hint("桌面歌词已隐藏", timeout_ms=1800)
+        else:
+            self._desktop_lyrics_window.show_lyrics()
+            self._desktop_lyrics_visible = True
+            self._show_lyrics_hint("桌面歌词已显示", timeout_ms=1800)
+            if self.current_lyrics_lines:
+                current_time = self.audio_player.get_position()
+                self.update_lyrics_view(current_time)
+
+    def _update_desktop_lyrics(self, current_line, next_line=""):
+        if not hasattr(self, "_desktop_lyrics_window"):
+            return
+        if not self._desktop_lyrics_visible:
+            return
+        self._desktop_lyrics_window.set_lyrics(current_line, next_line)
 

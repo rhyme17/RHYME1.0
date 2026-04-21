@@ -49,17 +49,26 @@ class _DummySettingsTarget(SettingsMixin):
         self.progress_visual_pulse_enabled = True
         self.progress_visual_wave_enabled = True
         self.progress_visual_accent_enabled = True
+        self.ui_font_weight = "regular"
+        self.lyrics_font_size = 18
         self.lyrics_output_dir = ""
         self.audio_player = _DummyAudioPlayer()
         self.lyrics_service = _DummyLyricsService()
         self.saved = False
         self.status_messages = []
+        self.font_weight_applied = None
 
     def schedule_save_app_settings(self):
         self.saved = True
 
     def show_status_hint(self, message, timeout_ms=0):
         self.status_messages.append((message, timeout_ms))
+
+    def apply_ui_font(self, font_weight, reapply_theme=False):
+        self.font_weight_applied = (str(font_weight), bool(reapply_theme))
+
+    def apply_ui_theme(self, theme_name):
+        self.theme_applied = str(theme_name)
 
 
 def test_apply_settings_syncs_custom_lyrics_dir_to_service_and_persists():
@@ -93,5 +102,20 @@ def test_apply_settings_rejects_invalid_lyrics_dir_and_falls_back(monkeypatch):
     assert target.lyrics_output_dir == ""
     assert target.lyrics_service.output_dir == ""
     assert target.status_messages
+
+
+def test_apply_settings_updates_ui_font_weight():
+    target = _DummySettingsTarget()
+    target.apply_settings({"ui_font_weight": "light"}, persist=False)
+
+    assert target.ui_font_weight == "light"
+    assert target.font_weight_applied == ("light", False)
+
+
+def test_apply_settings_updates_lyrics_font_size():
+    target = _DummySettingsTarget()
+    target.apply_settings({"lyrics_font_size": 24}, persist=False)
+
+    assert target.lyrics_font_size == 24
 
 

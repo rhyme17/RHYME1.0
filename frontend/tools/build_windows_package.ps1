@@ -38,6 +38,37 @@ function Invoke-CommandChecked {
     Write-Log "Done: $Label"
 }
 
+function Remove-TreeWithRetry {
+    param(
+        [string]$Path,
+        [int]$Retries = 3,
+        [int]$DelayMilliseconds = 300,
+        [switch]$ThrowOnFailure
+    )
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path $Path)) {
+        return $true
+    }
+
+    for ($attempt = 1; $attempt -le [Math]::Max(1, $Retries); $attempt++) {
+        try {
+            Remove-Item $Path -Recurse -Force -ErrorAction Stop
+            return $true
+        }
+        catch {
+            if ($attempt -ge $Retries) {
+                if ($ThrowOnFailure) {
+                    throw
+                }
+                Write-Log "Failed to remove path after $Retries attempts: $Path ($($_.Exception.Message))" "WARN"
+                return $false
+            }
+            Start-Sleep -Milliseconds $DelayMilliseconds
+        }
+    }
+
+    return $false
+}
+
 $ToolDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $FrontendDir = Resolve-Path (Join-Path $ToolDir "..")
 $ProjectRoot = Resolve-Path (Join-Path $FrontendDir "..")
@@ -52,6 +83,7 @@ $TargetAppDir = Join-Path $DistPath "RHYME"
 $IconSourcePath = Join-Path $ProjectRoot "img.png"
 $IconOutputPath = Join-Path $ProjectRoot "build\windows\app.ico"
 $IconGeneratorScript = Join-Path $ProjectRoot "frontend\tools\generate_windows_icon.py"
+$FontDir = Join-Path $ProjectRoot "frontend\assets\fonts\TTF"
 
 if ([string]::IsNullOrWhiteSpace($LogPath)) {
     $script:EffectiveLogPath = ""
@@ -102,6 +134,13 @@ try {
         Write-Log "Icon source not found, skip icon generation: $IconSourcePath" "WARN"
     }
 
+    if (Test-Path $FontDir) {
+        $fontCount = (Get-ChildItem -Path $FontDir -Filter *.ttf | Measure-Object).Count
+        Write-Log "Font assets detected: $fontCount file(s) from $FontDir"
+    } else {
+        Write-Log "Font assets directory not found, skip packaging fonts: $FontDir" "WARN"
+    }
+
     if ($RegenerateSpec -and (Test-Path $SpecPath)) {
         Remove-Item $SpecPath -Force
         Write-Log "Deleted existing spec (-RegenerateSpec): $SpecPath"
@@ -124,49 +163,52 @@ try {
             if (Test-Path $IconOutputPath) {
                 $specArgs += @("--icon", $IconOutputPath)
             }
+            if (Test-Path $FontDir) {
+                Get-ChildItem -Path $FontDir -Filter *.ttf | ForEach-Object {
+                    $specArgs += @("--add-data", "$($_.FullName);frontend\assets\fonts\TTF")
+                }
+            }
             $specArgs += $EntryScript
             python @specArgs
         }
     }
 
     if ($Clean) {
-        if (Test-Path $DistPath) {
-            Remove-Item $DistPath -Recurse -Force
+        if (Remove-TreeWithRetry $DistPath -Retries 3 -DelayMilliseconds 400) {
             Write-Log "Cleaned dist: $DistPath"
         }
-        if (Test-Path $LegacyDistPath) {
-            Remove-Item $LegacyDistPath -Recurse -Force
+        if (Remove-TreeWithRetry $LegacyDistPath -Retries 3 -DelayMilliseconds 400) {
             Write-Log "Cleaned legacy dist: $LegacyDistPath"
         }
-        if (Test-Path $LegacyFlatDistPath) {
-            Remove-Item $LegacyFlatDistPath -Recurse -Force
+        if (Remove-TreeWithRetry $LegacyFlatDistPath -Retries 3 -DelayMilliseconds 400) {
             Write-Log "Cleaned legacy dist: $LegacyFlatDistPath"
         }
-        if (Test-Path $WorkPath) {
-            Remove-Item $WorkPath -Recurse -Force
+        if (Remove-TreeWithRetry $WorkPath -Retries 3 -DelayMilliseconds 400) {
             Write-Log "Cleaned work: $WorkPath"
         }
-        if (Test-Path $LegacyWorkPath) {
-            Remove-Item $LegacyWorkPath -Recurse -Force
+        if (Remove-TreeWithRetry $LegacyWorkPath -Retries 3 -DelayMilliseconds 400) {
             Write-Log "Cleaned legacy work: $LegacyWorkPath"
         }
     }
 
     # 即使未使用 -Clean，也尝试清理历史目录，防止用户误点旧产物。
     if ((Test-Path $LegacyDistPath) -and ($LegacyDistPath -ne $DistPath)) {
-        Remove-Item $LegacyDistPath -Recurse -Force
-        Write-Log "Removed stale legacy dist: $LegacyDistPath"
+        if (Remove-TreeWithRetry $LegacyDistPath -Retries 2 -DelayMilliseconds 250) {
+            Write-Log "Removed stale legacy dist: $LegacyDistPath"
+        }
     }
     if (Test-Path $LegacyWorkPath) {
-        Remove-Item $LegacyWorkPath -Recurse -Force
-        Write-Log "Removed stale legacy work: $LegacyWorkPath"
+        if (Remove-TreeWithRetry $LegacyWorkPath -Retries 2 -DelayMilliseconds 250) {
+            Write-Log "Removed stale legacy work: $LegacyWorkPath"
+        }
     }
 
     # 非 -Clean 模式下也保证目标输出目录可写，避免 PyInstaller 在 COLLECT 阶段因占用失败。
     if ((-not $Clean) -and (Test-Path $TargetAppDir)) {
         try {
-            Remove-Item $TargetAppDir -Recurse -Force
-            Write-Log "Removed previous app output: $TargetAppDir"
+            if (Remove-TreeWithRetry $TargetAppDir -Retries 3 -DelayMilliseconds 400 -ThrowOnFailure) {
+                Write-Log "Removed previous app output: $TargetAppDir"
+            }
         }
         catch {
             throw "Cannot clean output directory: $TargetAppDir. Please close running RHYME.exe and retry with -Clean."

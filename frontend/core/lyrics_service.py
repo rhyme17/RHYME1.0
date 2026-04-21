@@ -17,8 +17,9 @@ from .asr_offline import (
     asr_available,
     transcribe_file_to_lrc_safe,
 )
+from .lyrics_offset_manager import LyricsOffsetManager
 from .lyrics_online_gequbao import GequbaoLyricsClient
-from .lrc_parser import parse_lrc_file
+from .lrc_parser import apply_offset_to_lines, parse_lrc_file
 
 
 _SAFE_NAME_PATTERN = re.compile(r"[^\w\-\u4e00-\u9fff ]+")
@@ -66,6 +67,7 @@ class LyricsService:
             debug_dir=self.online_lyrics_debug_dir,
         )
         self._instrumental_guard_song_ids = set()
+        self.offset_manager = LyricsOffsetManager(cache_dir)
 
     def set_lyrics_output_dir(self, path):
         self.lyrics_output_dir = str(path or "").strip()
@@ -76,7 +78,10 @@ class LyricsService:
         if local_path:
             lines, _ = self._safe_parse_lrc(local_path)
             if lines:
-                logger.debug("命中本地歌词: song_id=%s path=%s", song_id, local_path)
+                offset = self.offset_manager.get_offset(song_id)
+                if offset != 0:
+                    lines = apply_offset_to_lines(lines, offset)
+                logger.debug("命中本地歌词: song_id=%s path=%s offset=%dms", song_id, local_path, offset)
                 return LyricsResolveResult(lines=lines, source="local", file_path=local_path, pending_asr=False)
 
         cache_path = self.get_cache_lrc_path(song)
@@ -84,7 +89,10 @@ class LyricsService:
             lines, _ = self._safe_parse_lrc(cache_path)
             if lines:
                 self.export_cache_lyrics_to_song_dir(song, cache_path)
-                logger.debug("命中缓存歌词: song_id=%s path=%s", song_id, cache_path)
+                offset = self.offset_manager.get_offset(song_id)
+                if offset != 0:
+                    lines = apply_offset_to_lines(lines, offset)
+                logger.debug("命中缓存歌词: song_id=%s path=%s offset=%dms", song_id, cache_path, offset)
                 return LyricsResolveResult(
                     lines=lines,
                     source="asr-cache",

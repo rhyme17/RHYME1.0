@@ -3,6 +3,11 @@ import os
 import sys
 from functools import lru_cache
 
+# 确保项目根目录在 sys.path 中
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 APP_INSTANCE = None
 try:
     entry_bootstrap = importlib.import_module("frontend.apps.desktop.windows.modules.entry_bootstrap")
@@ -64,6 +69,9 @@ def _build_music_player_class():
     LibraryMixin = _load_windows_attr("modules.library_mixin", "LibraryMixin")
     LifecycleMixin = _load_windows_attr("modules.lifecycle_mixin", "LifecycleMixin")
     LyricsMixin = _load_windows_attr("modules.lyrics_mixin", "LyricsMixin")
+    MiniPlayerMixin = _load_windows_attr("modules.mini_player_mixin", "MiniPlayerMixin")
+    NetworkMixin = _load_windows_attr("modules.network_mixin", "NetworkMixin")
+    OnlineSearchMixin = _load_windows_attr("modules.online_search_mixin", "OnlineSearchMixin")
     PersistenceMixin = _load_windows_attr("modules.persistence_mixin", "PersistenceMixin")
     PlaybackMixin = _load_windows_attr("modules.playback_mixin", "PlaybackMixin")
     PlaylistMixin = _load_windows_attr("modules.playlist_mixin", "PlaylistMixin")
@@ -75,10 +83,13 @@ def _build_music_player_class():
     class MusicPlayer(
         ShortcutMixin,
         PlaybackMixin,
+        MiniPlayerMixin,
         LibraryMixin,
         PlaylistMixin,
         SettingsMixin,
         LyricsMixin,
+        OnlineSearchMixin,
+        NetworkMixin,
         PersistenceMixin,
         TrayMixin,
         LifecycleMixin,
@@ -103,9 +114,29 @@ def _build_music_player_class():
     return MusicPlayer
 
 
+_RUNTIME_EXPORTED_SYMBOLS = {
+    "LibraryMixin": ("modules.library_mixin", "LibraryMixin"),
+    "LifecycleMixin": ("modules.lifecycle_mixin", "LifecycleMixin"),
+    "LyricsMixin": ("modules.lyrics_mixin", "LyricsMixin"),
+    "NetworkMixin": ("modules.network_mixin", "NetworkMixin"),
+    "OnlineSearchMixin": ("modules.online_search_mixin", "OnlineSearchMixin"),
+    "PersistenceMixin": ("modules.persistence_mixin", "PersistenceMixin"),
+    "PlaybackMixin": ("modules.playback_mixin", "PlaybackMixin"),
+    "PlaylistMixin": ("modules.playlist_mixin", "PlaylistMixin"),
+    "SettingsMixin": ("modules.settings_mixin", "SettingsMixin"),
+    "ShortcutMixin": ("modules.shortcut_mixin", "ShortcutMixin"),
+    "TrayMixin": ("modules.tray_mixin", "TrayMixin"),
+    "UiMixin": ("modules.ui_mixin", "UiMixin"),
+}
+
+
 def __getattr__(name):
     if name == "MusicPlayer":
         return _build_music_player_class()
+    exported = _RUNTIME_EXPORTED_SYMBOLS.get(str(name or ""))
+    if exported is not None:
+        module_suffix, attr_name = exported
+        return _load_windows_attr(module_suffix, attr_name)
     raise AttributeError(name)
 
 

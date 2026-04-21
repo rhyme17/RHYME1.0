@@ -4,11 +4,13 @@ import sys
 try:
     from frontend.core.library import MusicLibrary
     from frontend.core.lyrics_service import LyricsService
+    from frontend.core.online_music_service import OnlineMusicService
     from frontend.core.player import AudioPlayer
     from frontend.core.playlist import PlaylistManager
 except ModuleNotFoundError:
     from core.library import MusicLibrary
     from core.lyrics_service import LyricsService
+    from core.online_music_service import OnlineMusicService
     from core.player import AudioPlayer
     from core.playlist import PlaylistManager
 
@@ -30,6 +32,9 @@ def build_core_components(
         asr_beam_size=entry_config.asr_beam_size,
         asr_vad_filter=entry_config.asr_vad_filter,
     )
+    player.online_music_service = OnlineMusicService()
+    player.app_data_dir = entry_config.windows_app_dir
+    player.download_dir = os.path.join(entry_config.windows_app_dir, "downloads")
     player.playlists_file_path = entry_config.playlists_file
     player.settings_file_path = entry_config.settings_file
     player.load_playlists()
@@ -70,6 +75,11 @@ def init_runtime_state(player):
     player.progress_visual_pulse_enabled = True
     player.progress_visual_wave_enabled = True
     player.progress_visual_accent_enabled = True
+    player.ui_font_weight = "regular"
+    player.lyrics_font_size = 18
+    player._ui_font_css_rule = ""
+    player._ui_font_registry = {}
+    player.ui_theme = "light"
     player.lyrics_output_dir = ""
     player.async_decode_on_play = bool(getattr(sys, "frozen", False))
     player._decode_request_id = 0
@@ -78,9 +88,12 @@ def init_runtime_state(player):
     player.tray_enabled = True
     player.close_to_tray_enabled = False
     player.close_behavior_configured = False
+    player.audio_output_strategy = "follow_system"
+    player.volume_uniformity_level = "medium"
     player.fixed_output_device_signature = None
     player._tray_icon = None
     player._tray_menu = None
     player._tray_hint_shown = False
     player._quit_requested = False
+    player._play_next_queue = []
 

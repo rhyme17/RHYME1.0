@@ -3,19 +3,25 @@ import os
 from PyQt5.QtWidgets import QDialog
 
 try:
-    from frontend.apps.desktop.windows.modules.settings_dialog import SettingsDialog
     from frontend.apps.desktop.windows.modules.settings_contract import (
         clamp_int,
         normalize_audio_output_strategy,
+        normalize_lyrics_font_size,
+        normalize_ui_font_weight,
+        normalize_ui_theme,
         normalize_volume_uniformity_level,
     )
+    from frontend.apps.desktop.windows.modules.settings_dialog import SettingsDialog
 except ModuleNotFoundError:
-    from apps.desktop.windows.modules.settings_dialog import SettingsDialog
     from apps.desktop.windows.modules.settings_contract import (
         clamp_int,
         normalize_audio_output_strategy,
+        normalize_lyrics_font_size,
+        normalize_ui_font_weight,
+        normalize_ui_theme,
         normalize_volume_uniformity_level,
     )
+    from apps.desktop.windows.modules.settings_dialog import SettingsDialog
 
 
 class SettingsMixin:
@@ -32,6 +38,10 @@ class SettingsMixin:
             "progress_visual_pulse_enabled": bool(getattr(self, "progress_visual_pulse_enabled", True)),
             "progress_visual_wave_enabled": bool(getattr(self, "progress_visual_wave_enabled", True)),
             "progress_visual_accent_enabled": bool(getattr(self, "progress_visual_accent_enabled", True)),
+            "audio_visualizer_enabled": bool(getattr(self, "audio_visualizer_enabled", True)),
+            "ui_font_weight": str(getattr(self, "ui_font_weight", "regular") or "regular"),
+            "lyrics_font_size": int(getattr(self, "lyrics_font_size", 18)),
+            "ui_theme": str(getattr(self, "ui_theme", "light") or "light"),
             "lyrics_output_dir": str(getattr(self, "lyrics_output_dir", "") or ""),
         }
 
@@ -42,35 +52,39 @@ class SettingsMixin:
         self.apply_settings(dialog.values(), persist=True)
 
     def apply_settings(self, values, persist=True):
-        self.tray_enabled = bool(values.get("tray_enabled", self.tray_enabled))
-        self.close_to_tray_enabled = bool(values.get("close_to_tray_enabled", self.close_to_tray_enabled))
+        tray_enabled_default = bool(getattr(self, "tray_enabled", True))
+        close_to_tray_default = bool(getattr(self, "close_to_tray_enabled", False))
+        self.tray_enabled = bool(values.get("tray_enabled", tray_enabled_default))
+        self.close_to_tray_enabled = bool(values.get("close_to_tray_enabled", close_to_tray_default))
         if "close_to_tray_enabled" in values:
             self.close_behavior_configured = True
         self.high_quality_output_enabled = bool(
             values.get("high_quality_output", getattr(self, "high_quality_output_enabled", False))
         )
 
+        current_volume_step = int(getattr(self, "keyboard_volume_step", 5))
         self.keyboard_volume_step = clamp_int(
-            values.get("keyboard_volume_step", self.keyboard_volume_step),
-            default=self.keyboard_volume_step,
+            values.get("keyboard_volume_step", current_volume_step),
+            default=current_volume_step,
             minimum=1,
             maximum=20,
         )
+        current_seek_step = int(getattr(self, "keyboard_seek_step_seconds", 5))
         self.keyboard_seek_step_seconds = clamp_int(
-            values.get("keyboard_seek_step_seconds", self.keyboard_seek_step_seconds),
-            default=self.keyboard_seek_step_seconds,
+            values.get("keyboard_seek_step_seconds", current_seek_step),
+            default=current_seek_step,
             minimum=1,
             maximum=30,
         )
 
         strategy = normalize_audio_output_strategy(
-            values.get("audio_output_strategy", self.audio_output_strategy),
+            values.get("audio_output_strategy", getattr(self, "audio_output_strategy", "follow_system")),
             default="follow_system",
         )
         self.audio_output_strategy = strategy
 
         uniformity = normalize_volume_uniformity_level(
-            values.get("volume_uniformity_level", self.volume_uniformity_level),
+            values.get("volume_uniformity_level", getattr(self, "volume_uniformity_level", "medium")),
             default="medium",
         )
         self.volume_uniformity_level = uniformity
@@ -88,14 +102,34 @@ class SettingsMixin:
             self.audio_player.set_loudness_normalization_level(uniformity)
 
         self.progress_visual_pulse_enabled = bool(
-            values.get("progress_visual_pulse_enabled", self.progress_visual_pulse_enabled)
+            values.get("progress_visual_pulse_enabled", getattr(self, "progress_visual_pulse_enabled", True))
         )
         self.progress_visual_wave_enabled = bool(
-            values.get("progress_visual_wave_enabled", self.progress_visual_wave_enabled)
+            values.get("progress_visual_wave_enabled", getattr(self, "progress_visual_wave_enabled", True))
         )
         self.progress_visual_accent_enabled = bool(
-            values.get("progress_visual_accent_enabled", self.progress_visual_accent_enabled)
+            values.get("progress_visual_accent_enabled", getattr(self, "progress_visual_accent_enabled", True))
         )
+        self.audio_visualizer_enabled = bool(
+            values.get("audio_visualizer_enabled", getattr(self, "audio_visualizer_enabled", True))
+        )
+        self.ui_font_weight = normalize_ui_font_weight(
+            values.get("ui_font_weight", getattr(self, "ui_font_weight", "regular")),
+            default="regular",
+        )
+        self.lyrics_font_size = normalize_lyrics_font_size(
+            values.get("lyrics_font_size", getattr(self, "lyrics_font_size", 18)),
+            default=18,
+        )
+        self.ui_theme = normalize_ui_theme(values.get("ui_theme", getattr(self, "ui_theme", "light")), default="light")
+
+        if hasattr(self, "apply_ui_font"):
+            self.apply_ui_font(self.ui_font_weight, reapply_theme=False)
+        if hasattr(self, "apply_lyrics_font_size"):
+            self.apply_lyrics_font_size(self.lyrics_font_size, reapply_theme=False)
+        if hasattr(self, "apply_ui_theme"):
+            self.apply_ui_theme(self.ui_theme)
+
         lyrics_output_dir = str(values.get("lyrics_output_dir", getattr(self, "lyrics_output_dir", "")) or "").strip()
         if lyrics_output_dir:
             try:
@@ -113,6 +147,8 @@ class SettingsMixin:
             self.set_progress_visual_wave_enabled(self.progress_visual_wave_enabled)
         if hasattr(self, "set_progress_visual_accent_enabled"):
             self.set_progress_visual_accent_enabled(self.progress_visual_accent_enabled)
+        if hasattr(self, "set_audio_visualizer_enabled"):
+            self.set_audio_visualizer_enabled(self.audio_visualizer_enabled)
 
         if hasattr(self, "lyrics_service") and hasattr(self.lyrics_service, "set_lyrics_output_dir"):
             self.lyrics_service.set_lyrics_output_dir(self.lyrics_output_dir)

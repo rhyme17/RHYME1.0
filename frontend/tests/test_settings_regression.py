@@ -35,3 +35,15 @@ def test_settings_dialog_allows_clearing_custom_lyrics_output_dir():
     assert dialog.values()["lyrics_output_dir"] == ""
 
 
+def test_settings_dialog_exposes_ui_font_weight_choice():
+    dialog = SettingsDialog({"ui_font_weight": "medium"})
+    values = dialog.values()
+    assert values["ui_font_weight"] == "medium"
+
+
+def test_settings_dialog_exposes_lyrics_font_size_choice():
+    dialog = SettingsDialog({"lyrics_font_size": 20})
+    values = dialog.values()
+    assert values["lyrics_font_size"] == 20
+
+

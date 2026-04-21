@@ -94,6 +94,22 @@ class PlaylistManager:
             self.current_playlist_name = next(iter(self.playlists))
         return True
 
+    def reorder_playlists(self, ordered_names):
+        if not ordered_names:
+            return False
+        new_playlists = {}
+        for name in ordered_names:
+            if name in self.playlists:
+                new_playlists[name] = self.playlists[name]
+        for name, songs in self.playlists.items():
+            if name not in new_playlists:
+                new_playlists[name] = songs
+        self.playlists = new_playlists
+        return True
+
+    def get_playlist_by_name(self, name):
+        return self.playlists.get(name)
+
     def add_song_to_playlist(self, playlist_name, song):
         if playlist_name not in self.playlists:
             return False
